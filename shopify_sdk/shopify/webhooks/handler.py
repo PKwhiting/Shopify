@@ -1,0 +1,228 @@
+"""
+Webhook event handler
+
+Handles processing of different Shopify webhook events.
+"""
+
+import json
+from typing import Dict, Any, Optional, Callable, List
+from datetime import datetime, timezone
+
+
+class WebhookHandler:
+    """Handles processing of Shopify webhook events."""
+    
+    def __init__(self):
+        """Initialize webhook handler."""
+        self._event_handlers: Dict[str, List[Callable]] = {}
+    
+    def register_handler(self, topic: str, handler: Callable[[Dict[str, Any]], None]) -> None:
+        """
+        Register a handler for a specific webhook topic.
+        
+        Args:
+            topic (str): The webhook topic (e.g., 'orders/create', 'products/update')
+            handler (callable): Function to handle the webhook event
+        """
+        if topic not in self._event_handlers:
+            self._event_handlers[topic] = []
+        self._event_handlers[topic].append(handler)
+    
+    def unregister_handler(self, topic: str, handler: Callable[[Dict[str, Any]], None]) -> bool:
+        """
+        Unregister a handler for a specific webhook topic.
+        
+        Args:
+            topic (str): The webhook topic
+            handler (callable): Function to remove from handlers
+            
+        Returns:
+            bool: True if handler was removed
+        """
+        if topic in self._event_handlers:
+            try:
+                self._event_handlers[topic].remove(handler)
+                return True
+            except ValueError:
+                pass
+        return False
+    
+    def handle_webhook(self, topic: str, payload: str, headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+        """
+        Handle a webhook event.
+        
+        Args:
+            topic (str): The webhook topic
+            payload (str): The webhook payload (JSON string)
+            headers (dict, optional): HTTP headers from the webhook request
+            
+        Returns:
+            dict: Processing result
+        """
+        try:
+            # Parse JSON payload
+            data = json.loads(payload) if isinstance(payload, str) else payload
+            
+            # Create event context
+            event = {
+                'topic': topic,
+                'data': data,
+                'headers': headers or {},
+                'processed_at': datetime.now(timezone.utc).isoformat()
+            }
+            
+            # Process event through registered handlers
+            results = []
+            if topic in self._event_handlers:
+                for handler in self._event_handlers[topic]:
+                    try:
+                        result = handler(event)
+                        results.append({
+                            'handler': handler.__name__,
+                            'success': True,
+                            'result': result
+                        })
+                    except Exception as e:
+                        results.append({
+                            'handler': handler.__name__,
+                            'success': False,
+                            'error': str(e)
+                        })
+            
+            return {
+                'topic': topic,
+                'processed': True,
+                'handlers_executed': len(results),
+                'results': results
+            }
+        
+        except json.JSONDecodeError as e:
+            return {
+                'topic': topic,
+                'processed': False,
+                'error': f'Invalid JSON payload: {str(e)}'
+            }
+        except Exception as e:
+            return {
+                'topic': topic,
+                'processed': False,
+                'error': f'Processing error: {str(e)}'
+            }
+    
+    def get_registered_topics(self) -> List[str]:
+        """
+        Get list of topics with registered handlers.
+        
+        Returns:
+            list: List of topic names
+        """
+        return list(self._event_handlers.keys())
+    
+    def get_handler_count(self, topic: str) -> int:
+        """
+        Get number of handlers registered for a topic.
+        
+        Args:
+            topic (str): The webhook topic
+            
+        Returns:
+            int: Number of registered handlers
+        """
+        return len(self._event_handlers.get(topic, []))
+    
+    # Pre-defined handler methods for common webhook events
+    
+    def handle_order_created(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Default handler for order created webhooks.
+        
+        Args:
+            event (dict): Webhook event data
+            
+        Returns:
+            dict: Processing result
+        """
+        order = event['data']
+        return {
+            'order_id': order.get('id'),
+            'order_number': order.get('order_number'),
+            'customer_email': order.get('email'),
+            'total_price': order.get('total_price'),
+            'processed': True
+        }
+    
+    def handle_order_updated(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Default handler for order updated webhooks.
+        
+        Args:
+            event (dict): Webhook event data
+            
+        Returns:
+            dict: Processing result
+        """
+        order = event['data']
+        return {
+            'order_id': order.get('id'),
+            'order_number': order.get('order_number'),
+            'financial_status': order.get('financial_status'),
+            'fulfillment_status': order.get('fulfillment_status'),
+            'processed': True
+        }
+    
+    def handle_product_created(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Default handler for product created webhooks.
+        
+        Args:
+            event (dict): Webhook event data
+            
+        Returns:
+            dict: Processing result
+        """
+        product = event['data']
+        return {
+            'product_id': product.get('id'),
+            'title': product.get('title'),
+            'handle': product.get('handle'),
+            'product_type': product.get('product_type'),
+            'processed': True
+        }
+    
+    def handle_product_updated(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Default handler for product updated webhooks.
+        
+        Args:
+            event (dict): Webhook event data
+            
+        Returns:
+            dict: Processing result
+        """
+        product = event['data']
+        return {
+            'product_id': product.get('id'),
+            'title': product.get('title'),
+            'handle': product.get('handle'),
+            'status': product.get('status'),
+            'processed': True
+        }
+    
+    def handle_customer_created(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Default handler for customer created webhooks.
+        
+        Args:
+            event (dict): Webhook event data
+            
+        Returns:
+            dict: Processing result
+        """
+        customer = event['data']
+        return {
+            'customer_id': customer.get('id'),
+            'email': customer.get('email'),
+            'first_name': customer.get('first_name'),
+            'last_name': customer.get('last_name'),
+            'processed': True
+        }
