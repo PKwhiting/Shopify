@@ -6,19 +6,19 @@ Handles order-related operations via Shopify GraphQL API.
 
 from typing import Dict, Any, Optional
 from ..query_builder import QueryBuilder
+from .base import BaseResource
 
 
-class Orders:
+class Orders(BaseResource):
     """Resource class for handling Shopify orders."""
     
-    def __init__(self, client):
-        """
-        Initialize Orders resource.
-        
-        Args:
-            client: ShopifyClient instance
-        """
-        self.client = client
+    def get_resource_name(self) -> str:
+        """Get the singular resource name."""
+        return "order"
+    
+    def get_plural_resource_name(self) -> str:
+        """Get the plural resource name."""
+        return "orders"
     
     def list(self, first: int = 10, after: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -30,9 +30,13 @@ class Orders:
             
         Returns:
             dict: Orders data with pagination info
+            
+        Raises:
+            ValueError: If parameters are invalid
         """
+        self._validate_pagination_params(first, after)
         query, variables = QueryBuilder.build_order_query(first, after)
-        return self.client.execute_query(query, variables)
+        return self._execute_query_with_validation(query, variables)
     
     def get(self, order_id: str) -> Dict[str, Any]:
         """
@@ -43,7 +47,12 @@ class Orders:
             
         Returns:
             dict: Order data
+            
+        Raises:
+            ValueError: If order_id is invalid
         """
+        order_id = self._validate_id(order_id)
+        
         query = """
         query getOrder($id: ID!) {
             order(id: $id) {
@@ -118,7 +127,7 @@ class Orders:
         }
         """
         variables = {"id": order_id}
-        return self.client.execute_query(query, variables)
+        return self._execute_query_with_validation(query, variables)
     
     def update(self, order_id: str, order_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -130,8 +139,20 @@ class Orders:
             
         Returns:
             dict: Updated order data
+            
+        Raises:
+            ValueError: If parameters are invalid or operation fails
         """
-        order_data["id"] = order_id
+        order_id = self._validate_id(order_id)
+        
+        if not isinstance(order_data, dict):
+            raise ValueError("Order data must be a dictionary")
+        if not order_data:
+            raise ValueError("Order data cannot be empty")
+        
+        # Create a copy to avoid modifying the original
+        update_data = order_data.copy()
+        update_data["id"] = order_id
         
         mutation = """
         mutation orderUpdate($input: OrderInput!) {
@@ -151,8 +172,9 @@ class Orders:
             }
         }
         """
-        variables = {"input": order_data}
-        return self.client.execute_mutation(mutation, variables)
+        variables = {"input": update_data}
+        result = self._execute_mutation_with_validation(mutation, variables)
+        return self._process_user_errors(result, "Order update")
     
     def cancel(self, order_id: str, reason: str = "other", notify_customer: bool = False) -> Dict[str, Any]:
         """
@@ -165,7 +187,17 @@ class Orders:
             
         Returns:
             dict: Cancellation result
+            
+        Raises:
+            ValueError: If parameters are invalid or operation fails
         """
+        order_id = self._validate_id(order_id)
+        
+        # Validate reason
+        valid_reasons = ["customer", "declined", "fraud", "inventory", "other"]
+        if reason not in valid_reasons:
+            raise ValueError(f"Invalid cancel reason. Must be one of: {', '.join(valid_reasons)}")
+        
         mutation = """
         mutation orderCancel($orderId: ID!, $reason: OrderCancelReason!, $notifyCustomer: Boolean!) {
             orderCancel(orderId: $orderId, reason: $reason, notifyCustomer: $notifyCustomer) {
@@ -188,7 +220,8 @@ class Orders:
             "reason": reason.upper(),
             "notifyCustomer": notify_customer
         }
-        return self.client.execute_mutation(mutation, variables)
+        result = self._execute_mutation_with_validation(mutation, variables)
+        return self._process_user_errors(result, "Order cancellation")
     
     def fulfill(self, order_id: str, line_items: list, notify_customer: bool = True) -> Dict[str, Any]:
         """
@@ -201,7 +234,17 @@ class Orders:
             
         Returns:
             dict: Fulfillment result
+            
+        Raises:
+            ValueError: If parameters are invalid or operation fails
         """
+        order_id = self._validate_id(order_id)
+        
+        if not isinstance(line_items, list):
+            raise ValueError("Line items must be a list")
+        if not line_items:
+            raise ValueError("Line items cannot be empty")
+        
         mutation = """
         mutation fulfillmentCreate($input: FulfillmentInput!) {
             fulfillmentCreate(input: $input) {
@@ -226,4 +269,5 @@ class Orders:
                 "notifyCustomer": notify_customer
             }
         }
-        return self.client.execute_mutation(mutation, variables)
+        result = self._execute_mutation_with_validation(mutation, variables)
+        return self._process_user_errors(result, "Order fulfillment")

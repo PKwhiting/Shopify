@@ -6,19 +6,19 @@ Handles customer-related operations via Shopify GraphQL API.
 
 from typing import Dict, Any, Optional
 from ..query_builder import QueryBuilder
+from .base import BaseResource
 
 
-class Customers:
+class Customers(BaseResource):
     """Resource class for handling Shopify customers."""
     
-    def __init__(self, client):
-        """
-        Initialize Customers resource.
-        
-        Args:
-            client: ShopifyClient instance
-        """
-        self.client = client
+    def get_resource_name(self) -> str:
+        """Get the singular resource name."""
+        return "customer"
+    
+    def get_plural_resource_name(self) -> str:
+        """Get the plural resource name."""
+        return "customers"
     
     def list(self, first: int = 10, after: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -30,9 +30,13 @@ class Customers:
             
         Returns:
             dict: Customers data with pagination info
+            
+        Raises:
+            ValueError: If parameters are invalid
         """
+        self._validate_pagination_params(first, after)
         query, variables = QueryBuilder.build_customer_query(first, after)
-        return self.client.execute_query(query, variables)
+        return self._execute_query_with_validation(query, variables)
     
     def get(self, customer_id: str) -> Dict[str, Any]:
         """
@@ -43,7 +47,12 @@ class Customers:
             
         Returns:
             dict: Customer data
+            
+        Raises:
+            ValueError: If customer_id is invalid
         """
+        customer_id = self._validate_id(customer_id)
+        
         query = """
         query getCustomer($id: ID!) {
             customer(id: $id) {
@@ -93,7 +102,7 @@ class Customers:
         }
         """
         variables = {"id": customer_id}
-        return self.client.execute_query(query, variables)
+        return self._execute_query_with_validation(query, variables)
     
     def create(self, customer_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -104,7 +113,15 @@ class Customers:
             
         Returns:
             dict: Created customer data
+            
+        Raises:
+            ValueError: If customer_data is invalid or operation fails
         """
+        if not isinstance(customer_data, dict):
+            raise ValueError("Customer data must be a dictionary")
+        if not customer_data:
+            raise ValueError("Customer data cannot be empty")
+        
         mutation = """
         mutation customerCreate($input: CustomerInput!) {
             customerCreate(input: $input) {
@@ -124,7 +141,8 @@ class Customers:
         }
         """
         variables = {"input": customer_data}
-        return self.client.execute_mutation(mutation, variables)
+        result = self._execute_mutation_with_validation(mutation, variables)
+        return self._process_user_errors(result, "Customer creation")
     
     def update(self, customer_id: str, customer_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -136,8 +154,20 @@ class Customers:
             
         Returns:
             dict: Updated customer data
+            
+        Raises:
+            ValueError: If parameters are invalid or operation fails
         """
-        customer_data["id"] = customer_id
+        customer_id = self._validate_id(customer_id)
+        
+        if not isinstance(customer_data, dict):
+            raise ValueError("Customer data must be a dictionary")
+        if not customer_data:
+            raise ValueError("Customer data cannot be empty")
+        
+        # Create a copy to avoid modifying the original
+        update_data = customer_data.copy()
+        update_data["id"] = customer_id
         
         mutation = """
         mutation customerUpdate($input: CustomerInput!) {
@@ -157,8 +187,9 @@ class Customers:
             }
         }
         """
-        variables = {"input": customer_data}
-        return self.client.execute_mutation(mutation, variables)
+        variables = {"input": update_data}
+        result = self._execute_mutation_with_validation(mutation, variables)
+        return self._process_user_errors(result, "Customer update")
     
     def delete(self, customer_id: str) -> Dict[str, Any]:
         """
@@ -169,7 +200,12 @@ class Customers:
             
         Returns:
             dict: Deletion result
+            
+        Raises:
+            ValueError: If customer_id is invalid or operation fails
         """
+        customer_id = self._validate_id(customer_id)
+        
         mutation = """
         mutation customerDelete($input: CustomerDeleteInput!) {
             customerDelete(input: $input) {
@@ -182,4 +218,5 @@ class Customers:
         }
         """
         variables = {"input": {"id": customer_id}}
-        return self.client.execute_mutation(mutation, variables)
+        result = self._execute_mutation_with_validation(mutation, variables)
+        return self._process_user_errors(result, "Customer deletion")

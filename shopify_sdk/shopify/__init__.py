@@ -7,8 +7,9 @@ Supports API key authentication, resource querying, pagination, error handling, 
 
 from .client import ShopifyClient
 from .query_builder import QueryBuilder
+from .config import ShopifyConfig
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "PKwhiting"
 
-__all__ = ["ShopifyClient", "QueryBuilder"]
+__all__ = ["ShopifyClient", "QueryBuilder", "ShopifyConfig"]

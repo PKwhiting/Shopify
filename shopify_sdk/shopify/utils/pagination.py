@@ -109,49 +109,67 @@ class PaginationHelper:
         edges = connection.get("edges", [])
         return [edge.get("node", {}) for edge in edges]
     
-    def paginate_all(self, client, query_func, connection_key: str, 
+    def paginate_all(self, client, query_builder_func, connection_key: str, 
                      page_size: int = 50, **query_kwargs) -> Iterator[Dict[str, Any]]:
         """
-        Generator that automatically paginate through all pages.
+        Generator that automatically paginates through all pages.
         
         Args:
             client: Shopify client instance
-            query_func: Function to execute query (e.g., client.execute_query)
-            connection_key (str): Key for the connection
+            query_builder_func: Function to build query (e.g., QueryBuilder.build_product_query)
+            connection_key (str): Key for the connection (e.g., 'products', 'customers')
             page_size (int): Number of items per page
-            **query_kwargs: Additional arguments for the query function
+            **query_kwargs: Additional arguments for the query builder function
             
         Yields:
             dict: Individual node objects
+            
+        Raises:
+            ValueError: If parameters are invalid
         """
+        if not client or not hasattr(client, 'execute_query'):
+            raise ValueError("Invalid client: must have execute_query method")
+        
+        if not callable(query_builder_func):
+            raise ValueError("query_builder_func must be callable")
+        
+        if not isinstance(connection_key, str) or not connection_key.strip():
+            raise ValueError("connection_key must be a non-empty string")
+        
+        if not isinstance(page_size, int) or page_size < 1:
+            raise ValueError("page_size must be a positive integer")
+        if page_size > 250:
+            raise ValueError("page_size cannot exceed 250")
+        
+        connection_key = connection_key.strip()
         cursor = None
         
         while True:
-            # Execute query with current cursor
-            if hasattr(query_func, '__call__'):
-                # If it's a method like client.execute_query
-                query_kwargs['first'] = page_size
-                if cursor:
-                    query_kwargs['after'] = cursor
-                    
-                data = query_func(**query_kwargs)
-            else:
-                # If it's a pre-built query
-                data = client.execute_query(query_func, {
-                    'first': page_size,
-                    'after': cursor
-                })
-            
-            # Extract and yield nodes
-            nodes = self.extract_nodes(data, connection_key)
-            for node in nodes:
-                yield node
-            
-            # Check if there are more pages
-            if not self.has_next_page(data, connection_key):
-                break
+            try:
+                # Build query with current parameters
+                query, variables = query_builder_func(
+                    first=page_size, 
+                    after=cursor, 
+                    **query_kwargs
+                )
                 
-            # Get cursor for next page
-            cursor = self.get_next_cursor(data, connection_key)
-            if not cursor:
-                break
+                # Execute query
+                data = client.execute_query(query, variables)
+                
+                # Extract and yield nodes
+                nodes = self.extract_nodes(data, connection_key)
+                for node in nodes:
+                    yield node
+                
+                # Check if there are more pages
+                if not self.has_next_page(data, connection_key):
+                    break
+                    
+                # Get cursor for next page
+                cursor = self.get_next_cursor(data, connection_key)
+                if not cursor:
+                    break
+                    
+            except Exception as e:
+                # Add context to any errors
+                raise RuntimeError(f"Pagination error for {connection_key}: {str(e)}") from e
