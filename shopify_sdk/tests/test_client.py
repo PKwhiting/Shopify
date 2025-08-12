@@ -33,7 +33,7 @@ class TestShopifyClient(unittest.TestCase):
         self.assertIsNotNone(self.client.error_handler)
         self.assertEqual(
             self.client.base_url, 
-            "https://test-shop.myshopify.com/admin/api/2024-01/graphql.json"
+            "https://test-shop.myshopify.com/admin/api/2025-07/graphql.json"
         )
     
     def test_client_initialization_with_custom_version(self):
