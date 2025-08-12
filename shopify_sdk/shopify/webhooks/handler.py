@@ -5,6 +5,7 @@ Handles processing of different Shopify webhook events with signature verificati
 """
 
 import json
+import threading
 from typing import Dict, Any, Optional, Callable, List
 from datetime import datetime, timezone
 from .verifier import WebhookVerifier
@@ -22,6 +23,7 @@ class WebhookHandler:
             verify_signature (bool): Whether to verify webhook signatures (default: False for backward compatibility)
         """
         self._event_handlers: Dict[str, List[Callable]] = {}
+        self._handlers_lock = threading.RLock()  # Reentrant lock for thread safety
         self.verify_signature = verify_signature
         
         if webhook_secret:
@@ -54,9 +56,17 @@ class WebhookHandler:
             topic (str): The webhook topic (e.g., 'orders/create', 'products/update')
             handler (callable): Function to handle the webhook event
         """
-        if topic not in self._event_handlers:
-            self._event_handlers[topic] = []
-        self._event_handlers[topic].append(handler)
+        if not isinstance(topic, str) or not topic.strip():
+            raise ValueError("Topic must be a non-empty string")
+        if not callable(handler):
+            raise ValueError("Handler must be callable")
+        
+        topic = topic.strip()
+        
+        with self._handlers_lock:
+            if topic not in self._event_handlers:
+                self._event_handlers[topic] = []
+            self._event_handlers[topic].append(handler)
     
     def unregister_handler(self, topic: str, handler: Callable[[Dict[str, Any]], None]) -> bool:
         """
@@ -69,12 +79,21 @@ class WebhookHandler:
         Returns:
             bool: True if handler was removed
         """
-        if topic in self._event_handlers:
-            try:
-                self._event_handlers[topic].remove(handler)
-                return True
-            except ValueError:
-                pass
+        if not isinstance(topic, str) or not topic.strip():
+            return False
+        
+        topic = topic.strip()
+        
+        with self._handlers_lock:
+            if topic in self._event_handlers:
+                try:
+                    self._event_handlers[topic].remove(handler)
+                    # Clean up empty topic lists
+                    if not self._event_handlers[topic]:
+                        del self._event_handlers[topic]
+                    return True
+                except ValueError:
+                    pass
         return False
     
     def handle_webhook(self, topic: str, payload: str, headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
@@ -93,10 +112,18 @@ class WebhookHandler:
             ValueError: If signature verification fails
         """
         if not isinstance(topic, str) or not topic.strip():
-            raise ValueError("Topic must be a non-empty string")
+            return {
+                'topic': topic if isinstance(topic, str) else str(topic),
+                'processed': False,
+                'error': 'Topic must be a non-empty string'
+            }
         
         if not isinstance(payload, str):
-            raise ValueError("Payload must be a string")
+            return {
+                'topic': topic,
+                'processed': False,
+                'error': 'Payload must be a string'
+            }
         
         # Verify signature if enabled and verifier is available
         if self.verify_signature and self.verifier:
@@ -129,21 +156,24 @@ class WebhookHandler:
             
             # Process event through registered handlers
             results = []
-            if topic in self._event_handlers:
-                for handler in self._event_handlers[topic]:
-                    try:
-                        result = handler(event)
-                        results.append({
-                            'handler': handler.__name__,
-                            'success': True,
-                            'result': result
-                        })
-                    except Exception as e:
-                        results.append({
-                            'handler': handler.__name__,
-                            'success': False,
-                            'error': str(e)
-                        })
+            with self._handlers_lock:
+                handlers = self._event_handlers.get(topic, []).copy()  # Copy to avoid race conditions
+            
+            # Execute handlers outside the lock to prevent deadlocks
+            for handler in handlers:
+                try:
+                    result = handler(event)
+                    results.append({
+                        'handler': handler.__name__,
+                        'success': True,
+                        'result': result
+                    })
+                except Exception as e:
+                    results.append({
+                        'handler': handler.__name__,
+                        'success': False,
+                        'error': str(e)
+                    })
             
             return {
                 'topic': topic,
@@ -173,7 +203,8 @@ class WebhookHandler:
         Returns:
             list: List of topic names
         """
-        return list(self._event_handlers.keys())
+        with self._handlers_lock:
+            return list(self._event_handlers.keys())
     
     def get_handler_count(self, topic: str) -> int:
         """
@@ -185,7 +216,12 @@ class WebhookHandler:
         Returns:
             int: Number of registered handlers
         """
-        return len(self._event_handlers.get(topic, []))
+        if not isinstance(topic, str) or not topic.strip():
+            return 0
+        
+        topic = topic.strip()
+        with self._handlers_lock:
+            return len(self._event_handlers.get(topic, []))
     
     # Pre-defined handler methods for common webhook events
     

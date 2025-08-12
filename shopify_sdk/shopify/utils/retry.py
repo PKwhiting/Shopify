@@ -7,14 +7,10 @@ Handles automatic retries for transient errors and rate limiting.
 import time
 import random
 from typing import Any, Callable, Optional, Type
-from .error_handler import ShopifyAPIError
-
-class ShopifyRateLimitError(Exception):
-    def __init__(self, message: str = "Rate limit exceeded", retry_after: Optional[float] = None):
-        super().__init__(message)
-        self.retry_after = retry_after
-from ..config import ShopifyConfig
 import requests
+
+from .error_handler import ShopifyAPIError, ShopifyRateLimitError
+from ..config import ShopifyConfig
 
 
 class RetryHandler:
@@ -61,11 +57,16 @@ class RetryHandler:
                 if attempt >= self.config.max_retries:
                     break
                 
-                # Calculate delay
-                delay = self._calculate_delay(e, attempt)
-                
-                # Wait before retrying
-                time.sleep(delay)
+                # Calculate delay with better error handling
+                try:
+                    delay = self._calculate_delay(e, attempt)
+                    
+                    # Wait before retrying
+                    if delay > 0:
+                        time.sleep(delay)
+                except Exception as delay_error:
+                    # If delay calculation fails, use a minimal delay and continue
+                    time.sleep(1.0)
         
         # All retries exhausted, raise the last exception
         if last_exception:
@@ -107,16 +108,22 @@ class RetryHandler:
         Returns:
             float: Delay in seconds
         """
-        # For rate limit errors, use the retry-after header if available
-        if isinstance(error, ShopifyRateLimitError) and error.retry_after:
-            return float(error.retry_after)
-        
-        # For other errors, use exponential backoff with jitter
-        base_delay = self.config.retry_delay
-        exponential_delay = base_delay * (2 ** attempt)
-        
-        # Add jitter to avoid thundering herd
-        jitter = random.uniform(0, 0.5) * exponential_delay
-        
-        # Cap the maximum delay at 60 seconds
-        return min(exponential_delay + jitter, 60.0)
+        try:
+            # For rate limit errors, use the retry-after header if available
+            if isinstance(error, ShopifyRateLimitError) and error.retry_after:
+                return max(0.0, float(error.retry_after))
+            
+            # For other errors, use exponential backoff with jitter
+            base_delay = max(1, self.config.retry_delay)  # Ensure minimum delay
+            exponential_delay = base_delay * (2 ** min(attempt, MAX_BACKOFF_EXPONENT))  # Cap exponential growth
+            
+            # Add jitter to avoid thundering herd (0-50% of delay)
+            jitter = random.uniform(0, 0.5) * exponential_delay
+            
+            # Cap the maximum delay at 60 seconds
+            total_delay = min(exponential_delay + jitter, 60.0)
+            return max(0.1, total_delay)  # Minimum 100ms delay
+            
+        except Exception:
+            # Fallback to a safe default if calculation fails
+            return 1.0

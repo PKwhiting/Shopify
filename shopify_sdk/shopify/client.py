@@ -5,8 +5,11 @@ Main client for interacting with Shopify's GraphQL API.
 """
 
 import json
+import threading
 from typing import Dict, Any, Optional, Union
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from .auth.api_key import ApiKeyAuth
 from .utils.error_handler import ErrorHandler
@@ -69,6 +72,32 @@ class ShopifyClient:
         
         # For backward compatibility
         self.api_version = self.config.api_version
+        
+        # Initialize HTTP session with connection pooling and retry configuration
+        self._session_lock = threading.Lock()
+        self._session = self._create_session()
+    
+    def _create_session(self) -> requests.Session:
+        """
+        Create a requests session with connection pooling and retry strategy.
+        
+        Returns:
+            requests.Session: Configured session
+        """
+        session = requests.Session()
+        
+        # Configure connection pooling
+        adapter = HTTPAdapter(
+            pool_connections=getattr(self.config, "pool_connections", 10),  # Number of connection pools to cache
+            pool_maxsize=getattr(self.config, "pool_maxsize", 20),      # Maximum number of connections in the pool
+            max_retries=0,        # We handle retries ourselves
+            pool_block=False      # Don't block when pool is full
+        )
+        
+        session.mount('http://', adapter)
+        session.mount('https://', adapter)
+        
+        return session
     
     def _validate_shop_url(self, shop_url: str) -> str:
         """
@@ -145,15 +174,21 @@ class ShopifyClient:
         headers["Content-Type"] = "application/json"
         
         try:
-            response = requests.post(
-                self.base_url,
-                data=json.dumps(payload),
-                headers=headers,
-                timeout=self.config.timeout
-            )
+            with self._session_lock:
+                response = self._session.post(
+                    self.base_url,
+                    data=json.dumps(payload),
+                    headers=headers,
+                    timeout=self.config.timeout
+                )
             
             response.raise_for_status()
-            result = response.json()
+            
+            # Parse JSON with better error handling
+            try:
+                result = response.json()
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON response from API: {str(e)}") from e
             
             # Handle GraphQL errors
             if "errors" in result:
@@ -163,6 +198,9 @@ class ShopifyClient:
             
         except requests.exceptions.RequestException as e:
             self.error_handler.handle_request_error(e)
+        except (ValueError, json.JSONDecodeError) as e:
+            # Re-raise JSON parsing errors with better context
+            raise RuntimeError(f"Invalid response format from API: {str(e)}") from e
     
     def execute_mutation(self, mutation: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -182,3 +220,21 @@ class ShopifyClient:
             raise ValueError("Mutation must be a non-empty string")
         
         return self.execute_query(mutation, variables)
+    
+    def close(self) -> None:
+        """
+        Close the HTTP session to free up connections.
+        Should be called when done with the client.
+        """
+        with self._session_lock:
+            if hasattr(self, '_session') and self._session:
+                self._session.close()
+                self._session = None
+    
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - clean up resources."""
+        self.close()
