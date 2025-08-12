@@ -11,6 +11,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from shopify.auth.api_key import ApiKeyAuth
+from shopify.auth import from_environment
 
 
 class TestApiKeyAuth(unittest.TestCase):
@@ -53,6 +54,48 @@ class TestApiKeyAuth(unittest.TestCase):
         """Test validation with None API key."""
         none_auth = ApiKeyAuth(None)
         self.assertFalse(none_auth.is_valid())
+
+
+class TestEnvironmentAuth(unittest.TestCase):
+    """Test cases for environment variable authentication."""
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        # Clear any existing environment variable
+        if 'SHOPIFY_ACCESS_TOKEN' in os.environ:
+            del os.environ['SHOPIFY_ACCESS_TOKEN']
+    
+    def tearDown(self):
+        """Clean up after tests."""
+        # Clear any environment variable we set
+        if 'SHOPIFY_ACCESS_TOKEN' in os.environ:
+            del os.environ['SHOPIFY_ACCESS_TOKEN']
+    
+    def test_from_environment_with_token(self):
+        """Test creating auth from environment variable."""
+        test_token = "env_test_token_12345"
+        os.environ['SHOPIFY_ACCESS_TOKEN'] = test_token
+        
+        auth = from_environment()
+        self.assertEqual(auth.api_key, test_token)
+        self.assertTrue(auth.is_valid())
+    
+    def test_from_environment_without_token(self):
+        """Test creating auth without environment variable raises error."""
+        with self.assertRaises(ValueError) as context:
+            from_environment()
+        
+        self.assertIn("API key is required", str(context.exception))
+        self.assertIn("SHOPIFY_ACCESS_TOKEN", str(context.exception))
+    
+    def test_from_environment_with_empty_token(self):
+        """Test creating auth with empty environment variable raises error."""
+        os.environ['SHOPIFY_ACCESS_TOKEN'] = ""
+        
+        with self.assertRaises(ValueError) as context:
+            from_environment()
+        
+        self.assertIn("API key is required", str(context.exception))
 
 
 if __name__ == '__main__':
