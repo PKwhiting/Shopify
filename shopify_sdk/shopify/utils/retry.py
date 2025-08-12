@@ -115,7 +115,7 @@ class RetryHandler:
             
             # For other errors, use exponential backoff with jitter
             base_delay = max(1, self.config.retry_delay)  # Ensure minimum delay
-            exponential_delay = base_delay * (2 ** min(attempt, 6))  # Cap exponential growth
+            exponential_delay = base_delay * (2 ** min(attempt, MAX_BACKOFF_EXPONENT))  # Cap exponential growth
             
             # Add jitter to avoid thundering herd (0-50% of delay)
             jitter = random.uniform(0, 0.5) * exponential_delay
