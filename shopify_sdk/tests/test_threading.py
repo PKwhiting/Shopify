@@ -257,34 +257,20 @@ class TestThreadSafety(unittest.TestCase):
                 mock_response = Mock()
                 mock_response.json.return_value = {"data": {"batch": batch_id}}
                 mock_response.raise_for_status.return_value = None
-                
+
                 batch_results = []
-                
-                # Use a more reliable patch that doesn't interfere between threads
-                original_post = client._session.post
-                
+
                 def mock_post(*args, **kwargs):
                     return mock_response
-                
-                client._session.post = mock_post
-                
-                try:
-                    for i in range(10):  # 10 requests per batch
-                        query = f"query {{ test_{batch_id}_{i} }}"
-                        result = client.execute_query(query)
-                        batch_results.append(result)
-                # Use a thread-safe patch for the session's post method
-                def mock_post(*args, **kwargs):
-                    return mock_response
-                
+
                 with patch.object(client._session, "post", mock_post):
                     for i in range(10):  # 10 requests per batch
                         query = f"query {{ test_{batch_id}_{i} }}"
                         result = client.execute_query(query)
                         batch_results.append(result)
-                
+
                 results.append((batch_id, len(batch_results)))
-                
+
             except Exception as e:
                 errors.append((batch_id, str(e)))
         
