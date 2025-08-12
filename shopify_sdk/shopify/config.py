@@ -4,6 +4,7 @@ Configuration management for Shopify SDK
 Centralized configuration settings and validation.
 """
 
+import threading
 from typing import Optional, Dict, Any
 import os
 
@@ -56,6 +57,9 @@ class ShopifyConfig:
         
         # Store additional configuration
         self.extra_config = kwargs
+        
+        # Thread safety for configuration updates
+        self._config_lock = threading.Lock()
     
     def _validate_api_version(self, version: str) -> str:
         """Validate API version format."""
@@ -88,8 +92,8 @@ class ShopifyConfig:
     
     def _validate_retry_delay(self, retry_delay: int) -> int:
         """Validate retry delay value."""
-        if not isinstance(retry_delay, int) or retry_delay < 1:
-            raise ValueError("Retry delay must be a positive integer")
+        if not isinstance(retry_delay, int) or retry_delay < 0:
+            raise ValueError("Retry delay must be a non-negative integer")
         if retry_delay > 60:
             raise ValueError("Retry delay cannot exceed 60 seconds")
         return retry_delay
@@ -130,17 +134,18 @@ class ShopifyConfig:
         Args:
             **kwargs: Configuration values to update
         """
-        for key, value in kwargs.items():
-            if hasattr(self, f'_validate_{key}'):
-                # Use validation method if available
-                validator = getattr(self, f'_validate_{key}')
-                setattr(self, key, validator(value))
-            elif hasattr(self, key):
-                # Set directly if attribute exists
-                setattr(self, key, value)
-            else:
-                # Store in extra config
-                self.extra_config[key] = value
+        with self._config_lock:
+            for key, value in kwargs.items():
+                if hasattr(self, f'_validate_{key}'):
+                    # Use validation method if available
+                    validator = getattr(self, f'_validate_{key}')
+                    setattr(self, key, validator(value))
+                elif hasattr(self, key):
+                    # Set directly if attribute exists
+                    setattr(self, key, value)
+                else:
+                    # Store in extra config
+                    self.extra_config[key] = value
     
     def get(self, key: str, default: Any = None) -> Any:
         """
@@ -153,9 +158,10 @@ class ShopifyConfig:
         Returns:
             Configuration value or default
         """
-        if hasattr(self, key):
-            return getattr(self, key)
-        return self.extra_config.get(key, default)
+        with self._config_lock:
+            if hasattr(self, key):
+                return getattr(self, key)
+            return self.extra_config.get(key, default)
     
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -164,15 +170,16 @@ class ShopifyConfig:
         Returns:
             dict: Configuration as dictionary
         """
-        config = {
-            'api_version': self.api_version,
-            'timeout': self.timeout,
-            'max_retries': self.max_retries,
-            'retry_delay': self.retry_delay,
-            'page_size': self.page_size,
-        }
-        config.update(self.extra_config)
-        return config
+        with self._config_lock:
+            config = {
+                'api_version': self.api_version,
+                'timeout': self.timeout,
+                'max_retries': self.max_retries,
+                'retry_delay': self.retry_delay,
+                'page_size': self.page_size,
+            }
+            config.update(self.extra_config.copy())
+            return config
     
     @classmethod
     def from_environment(cls, prefix: str = "SHOPIFY_") -> 'ShopifyConfig':

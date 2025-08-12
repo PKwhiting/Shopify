@@ -100,7 +100,8 @@ class TestWebhookHandler(unittest.TestCase):
         result = self.handler.unregister_handler("orders/create", test_handler)
         
         self.assertTrue(result)
-        self.assertEqual(len(self.handler._event_handlers["orders/create"]), 0)
+        # Topic should be removed when no handlers remain
+        self.assertNotIn("orders/create", self.handler._event_handlers)
     
     def test_handle_webhook_success(self):
         """Test successful webhook handling."""

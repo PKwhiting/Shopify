@@ -40,7 +40,7 @@ class ShopifyGraphQLError(ShopifyAPIError):
             errors (list): List of GraphQL error objects
         """
         self.graphql_errors = errors
-        messages = [error.get("message", "Unknown GraphQL error") for error in errors]
+        messages = [error.get("message") or "Unknown GraphQL error" for error in errors]
         super().__init__("; ".join(messages))
 
 
@@ -88,7 +88,7 @@ class ErrorHandler:
         
         # Check for specific error types
         for error in errors:
-            message = error.get("message", "")
+            message = error.get("message", "") or ""  # Handle None messages
             extensions = error.get("extensions", {})
             code = extensions.get("code", "")
             
