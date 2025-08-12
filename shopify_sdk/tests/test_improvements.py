@@ -23,7 +23,7 @@ class TestShopifyConfig(unittest.TestCase):
     def test_default_configuration(self):
         """Test default configuration values."""
         config = ShopifyConfig()
-        self.assertEqual(config.api_version, "2024-01")
+        self.assertEqual(config.api_version, "2025-07")
         self.assertEqual(config.timeout, 30)
         self.assertEqual(config.max_retries, 3)
         self.assertEqual(config.retry_delay, 1)
@@ -62,7 +62,7 @@ class TestShopifyConfig(unittest.TestCase):
         """Test base URL generation."""
         config = ShopifyConfig()
         base_url = config.get_base_url("test-shop.myshopify.com")
-        expected = "https://test-shop.myshopify.com/admin/api/2024-01/graphql.json"
+        expected = "https://test-shop.myshopify.com/admin/api/2025-07/graphql.json"
         self.assertEqual(base_url, expected)
 
 

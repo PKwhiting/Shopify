@@ -28,7 +28,7 @@ class TestShopifyClient(unittest.TestCase):
     def test_client_initialization(self):
         """Test client initialization."""
         self.assertEqual(self.client.shop_url, "test-shop.myshopify.com")
-        self.assertEqual(self.client.api_version, "2024-01")
+        self.assertEqual(self.client.api_version, "2025-07")
         self.assertIsNotNone(self.client.auth)
         self.assertIsNotNone(self.client.error_handler)
         self.assertEqual(

@@ -135,7 +135,7 @@ from shopify import ShopifyClient
 client = ShopifyClient(
     shop_url="your-shop.myshopify.com",
     api_key="your-api-access-token",
-    api_version="2024-01"  # Optional, defaults to 2024-01
+    api_version="2025-07"  # Optional, defaults to 2025-07
 )
 ```
 

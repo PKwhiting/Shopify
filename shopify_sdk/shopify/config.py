@@ -13,7 +13,7 @@ class ShopifyConfig:
     """Configuration management for Shopify SDK."""
     
     # Default configuration values
-    DEFAULT_API_VERSION = "2024-01"
+    DEFAULT_API_VERSION = "2025-07"
     DEFAULT_TIMEOUT = 30
     DEFAULT_MAX_RETRIES = 3
     DEFAULT_RETRY_DELAY = 1

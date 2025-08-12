@@ -4,6 +4,7 @@ Shopify GraphQL API Client
 Main client for interacting with Shopify's GraphQL API.
 """
 
+import os
 import json
 import threading
 from typing import Dict, Any, Optional, Union
@@ -16,15 +17,18 @@ from .utils.error_handler import ErrorHandler
 from .utils.pagination import PaginationHelper
 from .utils.retry import RetryHandler
 from .config import ShopifyConfig
+import dotenv
+
+dotenv.load_dotenv()
 
 
 class ShopifyClient:
     """Main client for Shopify GraphQL API interactions."""
     
     def __init__(self, 
-                 shop_url: str, 
-                 api_key: str, 
-                 api_version: str = "2024-01",
+                 shop_url: str = None, 
+                 api_key: str = None, 
+                 api_version: str = "2025-07",
                  config: Optional[ShopifyConfig] = None,
                  enable_retry: bool = True,
                  **config_kwargs):
@@ -42,7 +46,7 @@ class ShopifyClient:
         Raises:
             ValueError: If required parameters are invalid
         """
-        self.shop_url = self._validate_shop_url(shop_url)
+        self.shop_url = self._validate_shop_url(shop_url or os.getenv("SHOP_URL"))
         
         # Initialize configuration
         if config is None:
@@ -53,7 +57,7 @@ class ShopifyClient:
             self.config = config
         
         # Initialize authentication
-        self.auth = ApiKeyAuth(api_key)
+        self.auth = ApiKeyAuth(_from_env=True)
         if not self.auth.is_valid():
             raise ValueError("Invalid API key provided")
         
