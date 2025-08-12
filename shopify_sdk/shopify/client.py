@@ -11,6 +11,7 @@ import requests
 from .auth.api_key import ApiKeyAuth
 from .utils.error_handler import ErrorHandler
 from .utils.pagination import PaginationHelper
+from .utils.retry import RetryHandler
 from .config import ShopifyConfig
 
 
@@ -22,6 +23,7 @@ class ShopifyClient:
                  api_key: str, 
                  api_version: str = "2024-01",
                  config: Optional[ShopifyConfig] = None,
+                 enable_retry: bool = True,
                  **config_kwargs):
         """
         Initialize the Shopify client.
@@ -31,6 +33,7 @@ class ShopifyClient:
             api_key (str): The API access token
             api_version (str): The API version to use (deprecated, use config instead)
             config (ShopifyConfig, optional): Configuration instance
+            enable_retry (bool): Whether to enable automatic retries
             **config_kwargs: Additional configuration options
             
         Raises:
@@ -54,6 +57,12 @@ class ShopifyClient:
         # Initialize helpers
         self.error_handler = ErrorHandler()
         self.pagination = PaginationHelper()
+        
+        # Initialize retry handler if enabled
+        if enable_retry:
+            self.retry_handler = RetryHandler(self.config)
+        else:
+            self.retry_handler = None
         
         # Generate base URL using configuration
         self.base_url = self.config.get_base_url(self.shop_url)
@@ -91,7 +100,7 @@ class ShopifyClient:
     
     def execute_query(self, query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Execute a GraphQL query against Shopify's API.
+        Execute a GraphQL query against Shopify's API with automatic retries.
         
         Args:
             query (str): The GraphQL query string
@@ -110,6 +119,23 @@ class ShopifyClient:
         if variables is not None and not isinstance(variables, dict):
             raise ValueError("Variables must be a dictionary")
         
+        # Execute with retry if retry handler is available
+        if self.retry_handler:
+            return self.retry_handler.execute_with_retry(self._execute_query, query, variables)
+        else:
+            return self._execute_query(query, variables)
+    
+    def _execute_query(self, query: str, variables: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Internal method to execute a GraphQL query.
+        
+        Args:
+            query (str): The GraphQL query string
+            variables (dict, optional): Variables for the GraphQL query
+            
+        Returns:
+            dict: The response data from the API
+        """
         payload = {
             "query": query.strip(),
             "variables": variables or {}
