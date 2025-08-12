@@ -11,12 +11,16 @@ import requests
 
 class ShopifyAPIError(Exception):
     """Base exception for Shopify API errors."""
-    
-    def __init__(self, message: str, error_code: Optional[str] = None, 
-                 response: Optional[requests.Response] = None):
+
+    def __init__(
+        self,
+        message: str,
+        error_code: Optional[str] = None,
+        response: Optional[requests.Response] = None,
+    ):
         """
         Initialize Shopify API error.
-        
+
         Args:
             message (str): Error message
             error_code (str, optional): Specific error code
@@ -31,11 +35,11 @@ class ShopifyAPIError(Exception):
 
 class ShopifyGraphQLError(ShopifyAPIError):
     """Exception for GraphQL-specific errors."""
-    
+
     def __init__(self, errors: List[Dict[str, Any]]):
         """
         Initialize GraphQL error.
-        
+
         Args:
             errors (list): List of GraphQL error objects
         """
@@ -46,11 +50,11 @@ class ShopifyGraphQLError(ShopifyAPIError):
 
 class ShopifyRateLimitError(ShopifyAPIError):
     """Exception for rate limiting errors."""
-    
+
     def __init__(self, message: str, retry_after: Optional[int] = None):
         """
         Initialize rate limit error.
-        
+
         Args:
             message (str): Error message
             retry_after (int, optional): Seconds to wait before retrying
@@ -61,23 +65,24 @@ class ShopifyRateLimitError(ShopifyAPIError):
 
 class ShopifyAuthError(ShopifyAPIError):
     """Exception for authentication errors."""
+
     pass
 
 
 class ErrorHandler:
     """Handles various types of errors from Shopify API."""
-    
+
     def __init__(self):
         """Initialize error handler."""
         pass
-    
+
     def handle_graphql_errors(self, errors: List[Dict[str, Any]]) -> None:
         """
         Handle GraphQL errors from API response.
-        
+
         Args:
             errors (list): List of GraphQL error objects
-            
+
         Raises:
             ShopifyGraphQLError: For GraphQL-specific errors
             ShopifyAuthError: For authentication errors
@@ -85,32 +90,32 @@ class ErrorHandler:
         """
         if not errors:
             return
-        
+
         # Check for specific error types
         for error in errors:
             message = error.get("message", "") or ""  # Handle None messages
             extensions = error.get("extensions", {})
             code = extensions.get("code", "")
-            
+
             # Authentication errors
             if "unauthorized" in message.lower() or code == "UNAUTHORIZED":
                 raise ShopifyAuthError(f"Authentication failed: {message}")
-            
-            # Rate limiting errors  
+
+            # Rate limiting errors
             if "throttled" in message.lower() or code == "THROTTLED":
                 retry_after = extensions.get("retryAfter")
                 raise ShopifyRateLimitError(f"Rate limit exceeded: {message}", retry_after)
-        
+
         # Generic GraphQL error
         raise ShopifyGraphQLError(errors)
-    
+
     def handle_request_error(self, error: requests.RequestException) -> None:
         """
         Handle HTTP request errors.
-        
+
         Args:
             error (requests.RequestException): Request error
-            
+
         Raises:
             ShopifyAPIError: For various HTTP errors
             ShopifyAuthError: For authentication errors
@@ -119,18 +124,20 @@ class ErrorHandler:
         if isinstance(error, requests.exceptions.HTTPError):
             response = error.response
             status_code = response.status_code
-            
+
             # Try to parse error details from response
             try:
                 error_data = response.json()
             except (json.JSONDecodeError, AttributeError):
                 error_data = {}
-            
+
             # Handle specific HTTP status codes
             if status_code == 401:
                 raise ShopifyAuthError("Invalid API credentials", response=response)
             elif status_code == 403:
-                raise ShopifyAuthError("Access forbidden - check API permissions", response=response)
+                raise ShopifyAuthError(
+                    "Access forbidden - check API permissions", response=response
+                )
             elif status_code == 429:
                 retry_after = response.headers.get("Retry-After")
                 retry_after = int(retry_after) if retry_after else None
@@ -156,21 +163,21 @@ class ErrorHandler:
                 if "message" in error_data:
                     message = error_data["message"]
                 raise ShopifyAPIError(message, response=response)
-        
+
         elif isinstance(error, requests.exceptions.Timeout):
             raise ShopifyAPIError("Request timeout - API response took too long")
         elif isinstance(error, requests.exceptions.ConnectionError):
             raise ShopifyAPIError("Connection error - unable to reach Shopify API")
         else:
             raise ShopifyAPIError(f"Request error: {str(error)}")
-    
+
     def is_retryable_error(self, error: Exception) -> bool:
         """
         Check if an error is retryable.
-        
+
         Args:
             error (Exception): The error to check
-            
+
         Returns:
             bool: True if the error is retryable
         """
@@ -184,21 +191,21 @@ class ErrorHandler:
             return True
         elif isinstance(error, requests.exceptions.ConnectionError):
             return True
-        
+
         return False
-    
+
     def get_retry_delay(self, error: Exception) -> int:
         """
         Get suggested retry delay for an error.
-        
+
         Args:
             error (Exception): The error to get delay for
-            
+
         Returns:
             int: Delay in seconds
         """
         if isinstance(error, ShopifyRateLimitError) and error.retry_after:
             return error.retry_after
-        
+
         # Default exponential backoff
         return 1
