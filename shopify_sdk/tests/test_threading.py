@@ -274,7 +274,6 @@ class TestThreadSafety(unittest.TestCase):
                         result = client.execute_query(query)
                         batch_results.append(result)
                 finally:
-                    # Restore original method
                 # Use a thread-safe patch for the session's post method
                 def mock_post(*args, **kwargs):
                     return mock_response
