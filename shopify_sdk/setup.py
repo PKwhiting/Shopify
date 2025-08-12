@@ -35,6 +35,7 @@ setup(
     python_requires=">=3.7",
     install_requires=[
         "requests>=2.25.0",
+        "python-dotenv>=0.19.0",
     ],
     extras_require={
         "dev": [
