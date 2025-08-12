@@ -7,7 +7,12 @@ Handles automatic retries for transient errors and rate limiting.
 import time
 import random
 from typing import Any, Callable, Optional, Type
-from .error_handler import ShopifyRateLimitError, ShopifyAPIError
+from .error_handler import ShopifyAPIError
+
+class ShopifyRateLimitError(Exception):
+    def __init__(self, message: str = "Rate limit exceeded", retry_after: Optional[float] = None):
+        super().__init__(message)
+        self.retry_after = retry_after
 from ..config import ShopifyConfig
 import requests
 
