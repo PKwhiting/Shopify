@@ -6,19 +6,19 @@ Handles product-related operations via Shopify GraphQL API.
 
 from typing import Dict, Any, Optional, List
 from ..query_builder import QueryBuilder
+from .base import BaseResource
 
 
-class Products:
+class Products(BaseResource):
     """Resource class for handling Shopify products."""
     
-    def __init__(self, client):
-        """
-        Initialize Products resource.
-        
-        Args:
-            client: ShopifyClient instance
-        """
-        self.client = client
+    def get_resource_name(self) -> str:
+        """Get the singular resource name."""
+        return "product"
+    
+    def get_plural_resource_name(self) -> str:
+        """Get the plural resource name."""
+        return "products"
     
     def list(self, first: int = 10, after: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -30,9 +30,13 @@ class Products:
             
         Returns:
             dict: Products data with pagination info
+            
+        Raises:
+            ValueError: If parameters are invalid
         """
+        self._validate_pagination_params(first, after)
         query, variables = QueryBuilder.build_product_query(first, after)
-        return self.client.execute_query(query, variables)
+        return self._execute_query_with_validation(query, variables)
     
     def get(self, product_id: str) -> Dict[str, Any]:
         """
@@ -43,7 +47,12 @@ class Products:
             
         Returns:
             dict: Product data
+            
+        Raises:
+            ValueError: If product_id is invalid
         """
+        product_id = self._validate_id(product_id)
+        
         query = """
         query getProduct($id: ID!) {
             product(id: $id) {
@@ -85,7 +94,7 @@ class Products:
         }
         """
         variables = {"id": product_id}
-        return self.client.execute_query(query, variables)
+        return self._execute_query_with_validation(query, variables)
     
     def create(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -96,7 +105,15 @@ class Products:
             
         Returns:
             dict: Created product data
+            
+        Raises:
+            ValueError: If product_data is invalid or operation fails
         """
+        if not isinstance(product_data, dict):
+            raise ValueError("Product data must be a dictionary")
+        if not product_data:
+            raise ValueError("Product data cannot be empty")
+        
         mutation = """
         mutation productCreate($input: ProductInput!) {
             productCreate(input: $input) {
@@ -115,7 +132,8 @@ class Products:
         }
         """
         variables = {"input": product_data}
-        return self.client.execute_mutation(mutation, variables)
+        result = self._execute_mutation_with_validation(mutation, variables)
+        return self._process_user_errors(result, "Product creation")
     
     def update(self, product_id: str, product_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -127,8 +145,20 @@ class Products:
             
         Returns:
             dict: Updated product data
+            
+        Raises:
+            ValueError: If parameters are invalid or operation fails
         """
-        product_data["id"] = product_id
+        product_id = self._validate_id(product_id)
+        
+        if not isinstance(product_data, dict):
+            raise ValueError("Product data must be a dictionary")
+        if not product_data:
+            raise ValueError("Product data cannot be empty")
+        
+        # Create a copy to avoid modifying the original
+        update_data = product_data.copy()
+        update_data["id"] = product_id
         
         mutation = """
         mutation productUpdate($input: ProductInput!) {
@@ -147,8 +177,9 @@ class Products:
             }
         }
         """
-        variables = {"input": product_data}
-        return self.client.execute_mutation(mutation, variables)
+        variables = {"input": update_data}
+        result = self._execute_mutation_with_validation(mutation, variables)
+        return self._process_user_errors(result, "Product update")
     
     def delete(self, product_id: str) -> Dict[str, Any]:
         """
@@ -159,7 +190,12 @@ class Products:
             
         Returns:
             dict: Deletion result
+            
+        Raises:
+            ValueError: If product_id is invalid or operation fails
         """
+        product_id = self._validate_id(product_id)
+        
         mutation = """
         mutation productDelete($input: ProductDeleteInput!) {
             productDelete(input: $input) {
@@ -172,4 +208,5 @@ class Products:
         }
         """
         variables = {"input": {"id": product_id}}
-        return self.client.execute_mutation(mutation, variables)
+        result = self._execute_mutation_with_validation(mutation, variables)
+        return self._process_user_errors(result, "Product deletion")

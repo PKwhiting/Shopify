@@ -1,20 +1,50 @@
 """
 Webhook event handler
 
-Handles processing of different Shopify webhook events.
+Handles processing of different Shopify webhook events with signature verification.
 """
 
 import json
 from typing import Dict, Any, Optional, Callable, List
 from datetime import datetime, timezone
+from .verifier import WebhookVerifier
 
 
 class WebhookHandler:
-    """Handles processing of Shopify webhook events."""
+    """Handles processing of Shopify webhook events with security verification."""
     
-    def __init__(self):
-        """Initialize webhook handler."""
+    def __init__(self, webhook_secret: Optional[str] = None, verify_signature: bool = False):
+        """
+        Initialize webhook handler.
+        
+        Args:
+            webhook_secret (str, optional): Secret for signature verification
+            verify_signature (bool): Whether to verify webhook signatures (default: False for backward compatibility)
+        """
         self._event_handlers: Dict[str, List[Callable]] = {}
+        self.verify_signature = verify_signature
+        
+        if webhook_secret:
+            self.verifier = WebhookVerifier(webhook_secret)
+        else:
+            self.verifier = None
+            if verify_signature:
+                raise ValueError("Webhook secret is required when signature verification is enabled")
+    
+    def set_webhook_secret(self, webhook_secret: str) -> None:
+        """
+        Set webhook secret for signature verification.
+        
+        Args:
+            webhook_secret (str): The webhook secret from Shopify
+            
+        Raises:
+            ValueError: If webhook secret is invalid
+        """
+        if not isinstance(webhook_secret, str) or not webhook_secret.strip():
+            raise ValueError("Webhook secret must be a non-empty string")
+        
+        self.verifier = WebhookVerifier(webhook_secret.strip())
     
     def register_handler(self, topic: str, handler: Callable[[Dict[str, Any]], None]) -> None:
         """
@@ -49,7 +79,7 @@ class WebhookHandler:
     
     def handle_webhook(self, topic: str, payload: str, headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         """
-        Handle a webhook event.
+        Handle a webhook event with optional signature verification.
         
         Args:
             topic (str): The webhook topic
@@ -58,7 +88,32 @@ class WebhookHandler:
             
         Returns:
             dict: Processing result
+            
+        Raises:
+            ValueError: If signature verification fails
         """
+        if not isinstance(topic, str) or not topic.strip():
+            raise ValueError("Topic must be a non-empty string")
+        
+        if not isinstance(payload, str):
+            raise ValueError("Payload must be a string")
+        
+        # Verify signature if enabled and verifier is available
+        if self.verify_signature and self.verifier:
+            if not headers:
+                return {
+                    'topic': topic,
+                    'processed': False,
+                    'error': 'Signature verification enabled but no headers provided'
+                }
+            
+            if not self.verifier.verify_request(payload, headers):
+                return {
+                    'topic': topic,
+                    'processed': False,
+                    'error': 'Webhook signature verification failed'
+                }
+        
         try:
             # Parse JSON payload
             data = json.loads(payload) if isinstance(payload, str) else payload
@@ -68,7 +123,8 @@ class WebhookHandler:
                 'topic': topic,
                 'data': data,
                 'headers': headers or {},
-                'processed_at': datetime.now(timezone.utc).isoformat()
+                'processed_at': datetime.now(timezone.utc).isoformat(),
+                'verified': self.verify_signature and self.verifier is not None
             }
             
             # Process event through registered handlers
@@ -92,6 +148,7 @@ class WebhookHandler:
             return {
                 'topic': topic,
                 'processed': True,
+                'verified': event['verified'],
                 'handlers_executed': len(results),
                 'results': results
             }

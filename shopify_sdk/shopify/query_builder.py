@@ -11,6 +11,7 @@ class QueryBuilder:
     """Helper class for building GraphQL queries."""
     
     def __init__(self):
+        """Initialize query builder."""
         self.reset()
     
     def reset(self) -> 'QueryBuilder':
@@ -34,14 +35,42 @@ class QueryBuilder:
             name (str): Variable name
             var_type (str): GraphQL type (e.g., 'String!', 'Int')
             value (Any): Variable value
+            
+        Returns:
+            QueryBuilder: Self for method chaining
+            
+        Raises:
+            ValueError: If parameters are invalid
         """
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Variable name must be a non-empty string")
+        if not isinstance(var_type, str) or not var_type.strip():
+            raise ValueError("Variable type must be a non-empty string")
+        
+        name = name.strip()
+        var_type = var_type.strip()
+        
         self._variable_definitions.append(f"${name}: {var_type}")
         self._variables[name] = value
         return self
     
     def add_field(self, field: str) -> 'QueryBuilder':
-        """Add a field to the query."""
-        self._fields.append(field)
+        """
+        Add a field to the query.
+        
+        Args:
+            field (str): GraphQL field
+            
+        Returns:
+            QueryBuilder: Self for method chaining
+            
+        Raises:
+            ValueError: If field is invalid
+        """
+        if not isinstance(field, str) or not field.strip():
+            raise ValueError("Field must be a non-empty string")
+        
+        self._fields.append(field.strip())
         return self
     
     def build(self) -> tuple[str, Dict[str, Any]]:
@@ -51,6 +80,9 @@ class QueryBuilder:
         Returns:
             tuple: (query_string, variables_dict)
         """
+        if not self._fields:
+            raise ValueError("Query must have at least one field")
+        
         query_parts = [self._query_type]
         
         if self._variable_definitions:
@@ -62,8 +94,9 @@ class QueryBuilder:
         query_parts.append("}")
         
         query = " ".join(query_parts)
-        return query, self._variables
+        return query, self._variables.copy()
     
+    # Static methods for common queries (kept for backward compatibility)
     @staticmethod
     def build_product_query(first: int = 10, after: Optional[str] = None) -> tuple[str, Dict[str, Any]]:
         """
@@ -75,10 +108,20 @@ class QueryBuilder:
             
         Returns:
             tuple: (query_string, variables_dict)
+            
+        Raises:
+            ValueError: If parameters are invalid
         """
+        if not isinstance(first, int) or first < 1:
+            raise ValueError("'first' parameter must be a positive integer")
+        if first > 250:
+            raise ValueError("'first' parameter cannot exceed 250")
+        if after is not None and (not isinstance(after, str) or not after.strip()):
+            raise ValueError("'after' parameter must be a non-empty string if provided")
+        
         variables = {"first": first}
         if after:
-            variables["after"] = after
+            variables["after"] = after.strip()
         
         query = """
         query getProducts($first: Int!, $after: String) {
@@ -120,10 +163,20 @@ class QueryBuilder:
             
         Returns:
             tuple: (query_string, variables_dict)
+            
+        Raises:
+            ValueError: If parameters are invalid
         """
+        if not isinstance(first, int) or first < 1:
+            raise ValueError("'first' parameter must be a positive integer")
+        if first > 250:
+            raise ValueError("'first' parameter cannot exceed 250")
+        if after is not None and (not isinstance(after, str) or not after.strip()):
+            raise ValueError("'after' parameter must be a non-empty string if provided")
+        
         variables = {"first": first}
         if after:
-            variables["after"] = after
+            variables["after"] = after.strip()
         
         query = """
         query getCustomers($first: Int!, $after: String) {
@@ -165,10 +218,20 @@ class QueryBuilder:
             
         Returns:
             tuple: (query_string, variables_dict)
+            
+        Raises:
+            ValueError: If parameters are invalid
         """
+        if not isinstance(first, int) or first < 1:
+            raise ValueError("'first' parameter must be a positive integer")
+        if first > 250:
+            raise ValueError("'first' parameter cannot exceed 250")
+        if after is not None and (not isinstance(after, str) or not after.strip()):
+            raise ValueError("'after' parameter must be a non-empty string if provided")
+        
         variables = {"first": first}
         if after:
-            variables["after"] = after
+            variables["after"] = after.strip()
         
         query = """
         query getOrders($first: Int!, $after: String) {
