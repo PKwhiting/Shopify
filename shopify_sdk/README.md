@@ -19,12 +19,38 @@ A Python SDK for interacting with Shopify's GraphQL API. This SDK provides a cle
 pip install shopify-graphql-sdk
 ```
 
+Or install from source with dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Environment Configuration
+
+For secure credential management, you can use environment variables instead of hardcoding API keys:
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Fill in your actual Shopify credentials in `.env`:
+   ```env
+   SHOPIFY_API_KEY=your_actual_api_key
+   SHOPIFY_SECRET=your_actual_secret
+   SHOPIFY_ACCESS_TOKEN=your_actual_access_token
+   ```
+
+3. The `.env` file is automatically ignored by git for security.
+
 ## Quick Start
+
+### Using Direct API Key
 
 ```python
 from shopify import ShopifyClient
 
-# Initialize the client
+# Initialize the client with explicit API key
 client = ShopifyClient(
     shop_url="your-shop.myshopify.com",
     api_key="your-api-access-token"
@@ -48,7 +74,58 @@ products_response = client.execute_query("""
 print(products_response)
 ```
 
+### Using Environment Variables
+
+```python
+from shopify import ShopifyClient
+from shopify.auth import from_environment
+
+# Initialize authentication from environment variables
+auth = from_environment()  # Loads SHOPIFY_ACCESS_TOKEN from .env
+
+# Initialize client with environment-based auth
+client = ShopifyClient(
+    shop_url="your-shop.myshopify.com",
+    api_key=auth.api_key  # Uses token from environment
+)
+
+# Or simply use the environment variable directly (if available)
+import os
+client = ShopifyClient(
+    shop_url="your-shop.myshopify.com", 
+    api_key=os.getenv('SHOPIFY_ACCESS_TOKEN')
+)
+```
+
 ## Usage
+
+### Authentication
+
+The SDK supports two methods of authentication:
+
+#### 1. Direct API Key (Traditional)
+```python
+from shopify.auth import ApiKeyAuth
+
+# Create auth with explicit API key
+auth = ApiKeyAuth("your-api-access-token")
+print(auth.get_headers())  # {'X-Shopify-Access-Token': 'your-api-access-token'}
+```
+
+#### 2. Environment Variables (Recommended)
+```python
+from shopify.auth import from_environment
+import os
+
+# Set environment variable
+os.environ['SHOPIFY_ACCESS_TOKEN'] = 'your-api-access-token'
+
+# Create auth from environment
+auth = from_environment()
+print(auth.get_headers())  # {'X-Shopify-Access-Token': 'your-api-access-token'}
+```
+
+The environment variable approach is more secure as it keeps sensitive credentials out of your code.
 
 ### Client Initialization
 
@@ -282,7 +359,8 @@ shopify_sdk/
 ## Requirements
 
 - Python 3.7+
-- requests >= 2.25.0
+- requests >= 2.25.0  
+- python-dotenv >= 0.19.0 (for environment variable support)
 
 ## License
 
@@ -302,6 +380,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 For issues and questions, please use the [GitHub Issues](https://github.com/PKwhiting/Shopify/issues) page.
 
 ## Changelog
+
+### v1.1.0
+- Added environment variable support for secure credential management
+- New `from_environment()` function for loading credentials from environment variables
+- Added `requirements.txt` for easier dependency management
+- Enhanced documentation with environment variable usage examples
+- Maintains full backward compatibility with existing code
 
 ### v1.0.0
 - Initial release
