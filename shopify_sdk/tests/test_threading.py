@@ -282,7 +282,6 @@ class TestThreadSafety(unittest.TestCase):
                         query = f"query {{ test_{batch_id}_{i} }}"
                         result = client.execute_query(query)
                         batch_results.append(result)
-                    client._session.post = original_post
                 
                 results.append((batch_id, len(batch_results)))
                 
