@@ -88,7 +88,6 @@ class ShopifyClient:
         
         # Configure connection pooling
         adapter = HTTPAdapter(
-            pool_connections=10,  # Number of connection pools to cache
             pool_connections=getattr(self.config, "pool_connections", 10),  # Number of connection pools to cache
             pool_maxsize=getattr(self.config, "pool_maxsize", 20),      # Maximum number of connections in the pool
             max_retries=0,        # We handle retries ourselves
