@@ -270,6 +270,48 @@ class QueryBuilder:
                             firstName
                             lastName
                             email
+                            phone
+                            acceptsMarketing
+                            state
+                            tags
+                            note
+                            defaultAddress {
+                                id
+                                address1
+                                address2
+                                city
+                                province
+                                country
+                                zip
+                                firstName
+                                lastName
+                                phone
+                                company
+                            }
+                        }
+                        billingAddress {
+                            address1
+                            address2
+                            city
+                            province
+                            country
+                            zip
+                            firstName
+                            lastName
+                            phone
+                            company
+                        }
+                        shippingAddress {
+                            address1
+                            address2
+                            city
+                            province
+                            country
+                            zip
+                            firstName
+                            lastName
+                            phone
+                            company
                         }
                     }
                     cursor

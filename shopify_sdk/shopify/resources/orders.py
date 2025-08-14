@@ -75,6 +75,56 @@ class Orders(BaseResource):
                     firstName
                     lastName
                     email
+                    phone
+                    acceptsMarketing
+                    state
+                    tags
+                    note
+                    createdAt
+                    updatedAt
+                    defaultAddress {
+                        id
+                        address1
+                        address2
+                        city
+                        province
+                        country
+                        zip
+                        firstName
+                        lastName
+                        phone
+                        company
+                    }
+                    addresses(first: 10) {
+                        edges {
+                            node {
+                                id
+                                address1
+                                address2
+                                city
+                                province
+                                country
+                                zip
+                                firstName
+                                lastName
+                                phone
+                                company
+                                isDefault
+                            }
+                        }
+                    }
+                }
+                billingAddress {
+                    address1
+                    address2
+                    city
+                    province
+                    country
+                    zip
+                    firstName
+                    lastName
+                    phone
+                    company
                 }
                 shippingAddress {
                     address1
@@ -86,6 +136,7 @@ class Orders(BaseResource):
                     firstName
                     lastName
                     phone
+                    company
                 }
                 lineItems(first: 250) {
                     edges {
@@ -122,6 +173,118 @@ class Orders(BaseResource):
                             trackingNumbers
                         }
                     }
+                }
+            }
+        }
+        """
+        variables = {"id": order_id}
+        return self._execute_query_with_validation(query, variables)
+
+    def get_buyer_info(self, order_id: str) -> Dict[str, Any]:
+        """
+        Get comprehensive buyer information for a specific order.
+
+        Args:
+            order_id (str): The order ID
+
+        Returns:
+            dict: Comprehensive buyer information including customer details,
+                  billing address, shipping address, and order contact info
+
+        Raises:
+            ValueError: If order_id is invalid
+        """
+        order_id = self._validate_id(order_id)
+
+        query = """
+        query getBuyerInfo($id: ID!) {
+            order(id: $id) {
+                id
+                name
+                email
+                phone
+                customer {
+                    id
+                    firstName
+                    lastName
+                    email
+                    phone
+                    acceptsMarketing
+                    state
+                    tags
+                    note
+                    createdAt
+                    updatedAt
+                    lifetimeDuration
+                    defaultAddress {
+                        id
+                        address1
+                        address2
+                        city
+                        province
+                        country
+                        zip
+                        firstName
+                        lastName
+                        phone
+                        company
+                    }
+                    addresses(first: 10) {
+                        edges {
+                            node {
+                                id
+                                address1
+                                address2
+                                city
+                                province
+                                country
+                                zip
+                                firstName
+                                lastName
+                                phone
+                                company
+                                isDefault
+                            }
+                        }
+                    }
+                    orders(first: 1) {
+                        edges {
+                            node {
+                                id
+                                createdAt
+                                totalPriceSet {
+                                    presentmentMoney {
+                                        amount
+                                        currencyCode
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                billingAddress {
+                    address1
+                    address2
+                    city
+                    province
+                    country
+                    zip
+                    firstName
+                    lastName
+                    phone
+                    company
+                }
+                shippingAddress {
+                    address1
+                    address2
+                    city
+                    province
+                    country
+                    zip
+                    firstName
+                    lastName
+                    phone
+                    company
                 }
             }
         }
