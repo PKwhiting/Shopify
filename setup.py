@@ -10,7 +10,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="Shopify",
-    version="1.0.1",
+    version="1.0.2",
     author="PKwhiting",
     author_email="",
     description="A Python SDK for interacting with Shopify's GraphQL API",
