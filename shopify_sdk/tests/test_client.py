@@ -32,7 +32,7 @@ class TestShopifyClient(unittest.TestCase):
         self.assertIsNotNone(self.client.auth)
         self.assertIsNotNone(self.client.error_handler)
         self.assertEqual(
-            self.client.base_url, 
+            self.client.base_url,
             "https://test-shop.myshopify.com/admin/api/2025-07/graphql.json"
         )
     

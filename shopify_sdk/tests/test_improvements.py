@@ -72,7 +72,7 @@ class TestClientValidation(unittest.TestCase):
     def test_invalid_shop_url(self):
         """Test client with invalid shop URL."""
         with self.assertRaises(ValueError):
-            ShopifyClient("", "test_key")
+            ShopifyClient(" ", "test_key")
         
         with self.assertRaises(ValueError):
             ShopifyClient("invalid-url", "test_key")
