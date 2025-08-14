@@ -597,7 +597,7 @@ class Product:
 
         # Default to publishing to web if no publications specified
         if publications is None:
-            publications = [{"publicationId": "gid://shopify/Publication/1"}]  # Web publication
+            publications = [{"publicationId": self.WEB_PUBLICATION_ID}]  # Web publication
 
         mutation = """
         mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
