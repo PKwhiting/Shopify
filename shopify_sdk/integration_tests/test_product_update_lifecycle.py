@@ -36,3 +36,7 @@ def test_product_update_lifecycle():
 
     # 4. Clean up
     assert product.delete()
+
+    # 5. Verify that the product no longer exists in shopfy
+    deleted = Product.get(client, product.id)
+    assert deleted is None
