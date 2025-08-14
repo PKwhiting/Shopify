@@ -18,6 +18,9 @@ class Product:
     Provides classmethods for operations like search, get, create and
     instance methods for operations like publish, save, delete.
     """
+    
+    # Web publication ID for publish/unpublish operations
+    WEB_PUBLICATION_ID = "gid://shopify/Publication/1"
 
     def __init__(self, client: "ShopifyClient", data: Dict[str, Any]):
         """
