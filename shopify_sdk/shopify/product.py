@@ -660,7 +660,7 @@ class Product:
 
         # Default to unpublishing from web if no publications specified
         if publications is None:
-            publications = [{"publicationId": "gid://shopify/Publication/1"}]  # Web publication
+            publications = [{"publicationId": self.WEB_PUBLICATION_ID}]  # Web publication
 
         mutation = """
         mutation publishableUnpublish($id: ID!, $input: [PublicationInput!]!) {
