@@ -18,9 +18,12 @@ class Product:
     Provides classmethods for operations like search, get, create and
     instance methods for operations like publish, save, delete.
     """
-    
-    # Web publication ID for publish/unpublish operations
+
+    # Web publication ID for publish/unpublish operations (deprecated - use dynamic lookup)
     WEB_PUBLICATION_ID = "gid://shopify/Publication/1"
+
+    # Cache for store publications to avoid repeated queries
+    _publications_cache = {}
 
     def __init__(self, client: "ShopifyClient", data: Dict[str, Any]):
         """
@@ -34,6 +37,79 @@ class Product:
         self._data = data
         self._original_data = data.copy()
         self._dirty = False
+
+    def _get_store_publications(self) -> List[Dict[str, Any]]:
+        """
+        Get all available publications for the store.
+
+        Returns:
+            List of publication dictionaries with id and name
+
+        Raises:
+            ValueError: If query fails
+        """
+        # Use shop URL as cache key to handle multiple stores
+        cache_key = getattr(self.client, "shop_url", "default")
+
+        # Return cached result if available
+        if cache_key in self._publications_cache:
+            return self._publications_cache[cache_key]
+
+        try:
+            query = """
+            query getPublications($first: Int!) {
+                publications(first: $first) {
+                    edges {
+                        node {
+                            id
+                            name
+                            supportsFuturePublishing
+                        }
+                    }
+                    pageInfo {
+                        hasNextPage
+                    }
+                }
+            }
+            """
+
+            variables = {"first": 50}  # Should be enough for most stores
+            result = self.client.execute_query(query, variables)
+
+            publications = []
+            if result and "publications" in result:
+                for edge in result["publications"]["edges"]:
+                    publications.append(edge["node"])
+
+            # Cache the result
+            self._publications_cache[cache_key] = publications
+            return publications
+        except Exception:
+            # If publications query fails, return empty list
+            # This allows fallback to static ID
+            self._publications_cache[cache_key] = []
+            return []
+
+    def _get_default_publication(self) -> Optional[Dict[str, Any]]:
+        """
+        Get the default web publication for the store.
+
+        Returns:
+            Publication dictionary or None if not found
+        """
+        publications = self._get_store_publications()
+
+        # Look for web-related publication first
+        for pub in publications:
+            name = pub.get("name", "").lower()
+            if "web" in name or "online" in name:
+                return pub
+
+        # If no web publication found, return the first one
+        if publications:
+            return publications[0]
+
+        return None
 
     @property
     def id(self) -> Optional[str]:
@@ -600,7 +676,12 @@ class Product:
 
         # Default to publishing to web if no publications specified
         if publications is None:
-            publications = [{"publicationId": self.WEB_PUBLICATION_ID}]  # Web publication
+            default_pub = self._get_default_publication()
+            if default_pub:
+                publications = [{"publicationId": default_pub["id"]}]
+            else:
+                # Fallback to the old static ID for backward compatibility
+                publications = [{"publicationId": self.WEB_PUBLICATION_ID}]
 
         mutation = """
         mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
@@ -663,7 +744,12 @@ class Product:
 
         # Default to unpublishing from web if no publications specified
         if publications is None:
-            publications = [{"publicationId": self.WEB_PUBLICATION_ID}]  # Web publication
+            default_pub = self._get_default_publication()
+            if default_pub:
+                publications = [{"publicationId": default_pub["id"]}]
+            else:
+                # Fallback to the old static ID for backward compatibility
+                publications = [{"publicationId": self.WEB_PUBLICATION_ID}]
 
         mutation = """
         mutation publishableUnpublish($id: ID!, $input: [PublicationInput!]!) {
