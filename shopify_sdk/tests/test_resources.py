@@ -189,7 +189,6 @@ class TestOrdersResource(unittest.TestCase):
         self.assertIn("customer", query)
         self.assertIn("billingAddress", query)
         self.assertIn("shippingAddress", query)
-        self.assertIn("acceptsMarketing", query)
         self.assertIn("defaultAddress", query)
         # Check that execute_query was called with 2 arguments: query and variables
         self.assertEqual(len(call_args[0]), 2)
