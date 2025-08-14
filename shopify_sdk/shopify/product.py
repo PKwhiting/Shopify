@@ -191,6 +191,10 @@ class Product:
         graphql_query = """
         query searchProducts($query: String, $first: Int!, $after: String) {
             products(query: $query, first: $first, after: $after) {
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
                 edges {
                     node {
                         id
