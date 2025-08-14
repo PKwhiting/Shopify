@@ -192,7 +192,6 @@ class ShopifyClient:
                     headers=headers,
                     timeout=self.config.timeout,
                 )
-            print(response)
             response.raise_for_status()
 
             # Parse JSON with better error handling
