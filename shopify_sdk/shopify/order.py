@@ -12,6 +12,34 @@ if TYPE_CHECKING:
 
 
 class Order:
+	@classmethod
+	def list(cls, client: "ShopifyClient"):
+		"""
+		Yield all orders from the store, paginating automatically.
+
+		Args:
+			client: ShopifyClient instance
+
+		Yields:
+			Order instances
+		"""
+		from .resources.orders import Orders
+		resource = Orders(client)
+		after = None
+		while True:
+			result = resource.list(first=250, after=after)
+			orders_data = result.get("orders", {})
+			edges = orders_data.get("edges", [])
+			for edge in edges:
+				node = edge.get("node")
+				if node:
+					yield cls(client, node)
+			page_info = orders_data.get("pageInfo", {})
+			if not page_info.get("hasNextPage") or not edges:
+				break
+			after = page_info.get("endCursor")
+			if not after:
+				break
 	"""
 	Simplified Order class representing an individual Shopify order.
 
