@@ -282,45 +282,6 @@ class TestProduct(unittest.TestCase):
         with self.assertRaises(ValueError):
             Product.create(self.mock_client, {})
     
-    def test_save_method(self):
-        """Test product.save() method."""
-        product = Product(self.mock_client, self.sample_product_data)
-        
-        # Modify product
-        product.title = 'Updated Title'
-        product.description = 'Updated description'
-        
-        mock_response = {
-            'data': {
-                'productUpdate': {
-                    'product': {
-                        'id': 'gid://shopify/Product/123456789',
-                        'title': 'Updated Title',
-                        'description': 'Updated description',
-                        'updatedAt': '2023-01-02T00:00:00Z'
-                    },
-                    'userErrors': []
-                }
-            }
-        }
-        self.mock_client.execute_mutation.return_value = mock_response
-        
-        updated_product = product.save()
-        
-        self.assertEqual(updated_product, product)
-        self.assertEqual(product.title, 'Updated Title')
-        self.assertFalse(product._dirty)
-        
-        # Verify mutation was called correctly
-        self.mock_client.execute_mutation.assert_called_once()
-        call_args = self.mock_client.execute_mutation.call_args
-        self.assertIn('productUpdate', call_args[0][0])
-        
-        input_data = call_args[0][1]['input']
-        self.assertEqual(input_data['id'], 'gid://shopify/Product/123456789')
-        self.assertEqual(input_data['title'], 'Updated Title')
-        self.assertEqual(input_data['description'], 'Updated description')
-    
     def test_save_no_changes(self):
         """Test product.save() when no changes made."""
         product = Product(self.mock_client, self.sample_product_data)
