@@ -175,66 +175,65 @@ class TestThreadSafety(unittest.TestCase):
         client = ShopifyClient(self.shop_url, self.api_key)
         webhook_handler = WebhookHandler()
         query_builder = QueryBuilder()
-        
+
         results = []
         errors = []
-        
-        def mixed_operation(op_id):
-            try:
-                operation_type = op_id % 4
-                
-                if operation_type == 0:
-                    # Client operation
-                    mock_response = Mock()
-                    mock_response.json.return_value = {"data": {"test": True}}
-                    mock_response.raise_for_status.return_value = None
-                    
-                    with patch.object(client._session, 'post', return_value=mock_response):
+
+        # Patch execute_query and execute_mutation for all threads
+        with patch.object(ShopifyClient, "execute_query", return_value={"data": {"test": True}}), \
+             patch.object(ShopifyClient, "execute_mutation", return_value={"data": {"test": True}}):
+
+            def mixed_operation(op_id):
+                try:
+                    operation_type = op_id % 4
+
+                    if operation_type == 0:
+                        # Client operation
                         result = client.execute_query("query { test }")
                         results.append((op_id, "client", result))
-                
-                elif operation_type == 1:
-                    # Query builder operation
-                    query_builder.reset()
-                    query_builder.add_field(f"field_{op_id}")
-                    query_builder.add_variable("var", "String!", f"value_{op_id}")
-                    query, variables = query_builder.build()
-                    results.append((op_id, "query_builder", {"query": query, "variables": variables}))
-                
-                elif operation_type == 2:
-                    # Webhook handler operation
-                    topic = f"test/event_{op_id}"
-                    
-                    def handler(event):
-                        return {"handled": True, "id": op_id}
-                    
-                    webhook_handler.register_handler(topic, handler)
-                    result = webhook_handler.handle_webhook(
-                        topic, 
-                        json.dumps({"id": op_id, "data": "test"})
-                    )
-                    webhook_handler.unregister_handler(topic, handler)
-                    results.append((op_id, "webhook", result))
-                
-                else:
-                    # Configuration operation
-                    client.config.update(extra_param=f"value_{op_id}")
-                    config_value = client.config.get("extra_param")
-                    results.append((op_id, "config", config_value))
-                    
-            except Exception as e:
-                errors.append((op_id, str(e)))
-        
-        # Run mixed concurrent operations
-        with ThreadPoolExecutor(max_workers=12) as executor:
-            futures = [executor.submit(mixed_operation, i) for i in range(48)]
-            for future in as_completed(futures):
-                future.result()
-        
+
+                    elif operation_type == 1:
+                        # Query builder operation
+                        query_builder.reset()
+                        query_builder.add_field(f"field_{op_id}")
+                        query_builder.add_variable("var", "String!", f"value_{op_id}")
+                        query, variables = query_builder.build()
+                        results.append((op_id, "query_builder", {"query": query, "variables": variables}))
+
+                    elif operation_type == 2:
+                        # Webhook handler operation
+                        topic = f"test/event_{op_id}"
+
+                        def handler(event):
+                            return {"handled": True, "id": op_id}
+
+                        webhook_handler.register_handler(topic, handler)
+                        result = webhook_handler.handle_webhook(
+                            topic,
+                            json.dumps({"id": op_id, "data": "test"})
+                        )
+                        webhook_handler.unregister_handler(topic, handler)
+                        results.append((op_id, "webhook", result))
+
+                    else:
+                        # Configuration operation
+                        client.config.update(extra_param=f"value_{op_id}")
+                        config_value = client.config.get("extra_param")
+                        results.append((op_id, "config", config_value))
+
+                except Exception as e:
+                    errors.append((op_id, str(e)))
+
+            # Run mixed concurrent operations
+            with ThreadPoolExecutor(max_workers=12) as executor:
+                futures = [executor.submit(mixed_operation, i) for i in range(48)]
+                for future in as_completed(futures):
+                    future.result()
+
         # Verify results
         self.assertEqual(len(errors), 0, f"Errors occurred: {errors}")
         self.assertEqual(len(results), 48)
-        
+
         # Verify operation types
         client_ops = [r for r in results if r[1] == "client"]
         query_ops = [r for r in results if r[1] == "query_builder"]

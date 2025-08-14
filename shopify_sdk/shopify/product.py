@@ -18,9 +18,12 @@ class Product:
     Provides classmethods for operations like search, get, create and
     instance methods for operations like publish, save, delete.
     """
-    
-    # Web publication ID for publish/unpublish operations
+
+    # Web publication ID for publish/unpublish operations (deprecated - use dynamic lookup)
     WEB_PUBLICATION_ID = "gid://shopify/Publication/1"
+
+    # Cache for store publications to avoid repeated queries
+    _publications_cache = {}
 
     def __init__(self, client: "ShopifyClient", data: Dict[str, Any]):
         """
@@ -31,9 +34,86 @@ class Product:
             data: Product data from GraphQL response
         """
         self.client = client
-        self._data = data
-        self._original_data = data.copy()
+        # Map descriptionHtml to description for SDK consistency
+        mapped_data = data.copy()
+        if "descriptionHtml" in mapped_data:
+            mapped_data["description"] = mapped_data["descriptionHtml"]
+        self._data = mapped_data
+        self._original_data = mapped_data.copy()
         self._dirty = False
+
+    def _get_store_publications(self) -> List[Dict[str, Any]]:
+        """
+        Get all available publications for the store.
+
+        Returns:
+            List of publication dictionaries with id and name
+
+        Raises:
+            ValueError: If query fails
+        """
+        # Use shop URL as cache key to handle multiple stores
+        cache_key = getattr(self.client, "shop_url", "default")
+
+        # Return cached result if available
+        if cache_key in self._publications_cache:
+            return self._publications_cache[cache_key]
+
+        try:
+            query = """
+            query getPublications($first: Int!) {
+                publications(first: $first) {
+                    edges {
+                        node {
+                            id
+                            name
+                            supportsFuturePublishing
+                        }
+                    }
+                    pageInfo {
+                        hasNextPage
+                    }
+                }
+            }
+            """
+
+            variables = {"first": 50}  # Should be enough for most stores
+            result = self.client.execute_query(query, variables)
+
+            publications = []
+            if result and "publications" in result:
+                for edge in result["publications"]["edges"]:
+                    publications.append(edge["node"])
+
+            # Cache the result
+            self._publications_cache[cache_key] = publications
+            return publications
+        except Exception:
+            # If publications query fails, return empty list
+            # This allows fallback to static ID
+            self._publications_cache[cache_key] = []
+            return []
+
+    def _get_default_publication(self) -> Optional[Dict[str, Any]]:
+        """
+        Get the default web publication for the store.
+
+        Returns:
+            Publication dictionary or None if not found
+        """
+        publications = self._get_store_publications()
+
+        # Look for web-related publication first
+        for pub in publications:
+            name = pub.get("name", "").lower()
+            if "web" in name or "online" in name:
+                return pub
+
+        # If no web publication found, return the first one
+        if publications:
+            return publications[0]
+
+        return None
 
     @property
     def id(self) -> Optional[str]:
@@ -244,11 +324,12 @@ class Product:
 
         result = client.execute_query(graphql_query, variables)
 
+        # Shopify returns mutation/query result directly (no top-level 'data' key)
+        products_data = result.get("products") if result else None
         products = []
-        if result and "data" in result and "products" in result["data"]:
-            for edge in result["data"]["products"]["edges"]:
+        if products_data and "edges" in products_data:
+            for edge in products_data["edges"]:
                 products.append(cls(client, edge["node"]))
-
         return products
 
     @classmethod
@@ -290,8 +371,6 @@ class Product:
                             sku
                             price
                             inventoryQuantity
-                            weight
-                            weightUnit
                         }
                     }
                 }
@@ -311,16 +390,13 @@ class Product:
         """
 
         variables = {"id": product_id}
+
         result = client.execute_query(query, variables)
 
-        if (
-            result
-            and "data" in result
-            and "product" in result["data"]
-            and result["data"]["product"]
-        ):
-            return cls(client, result["data"]["product"])
-
+        # Shopify returns mutation/query result directly (no top-level 'data' key)
+        product_data = result.get("product") if result else None
+        if product_data:
+            return cls(client, product_data)
         return None
 
     @classmethod
@@ -362,8 +438,6 @@ class Product:
                             sku
                             price
                             inventoryQuantity
-                            weight
-                            weightUnit
                         }
                     }
                 }
@@ -385,14 +459,10 @@ class Product:
         variables = {"handle": handle}
         result = client.execute_query(query, variables)
 
-        if (
-            result
-            and "data" in result
-            and "productByHandle" in result["data"]
-            and result["data"]["productByHandle"]
-        ):
-            return cls(client, result["data"]["productByHandle"])
-
+        # Shopify returns mutation/query result directly (no top-level 'data' key)
+        product_data = result.get("productByHandle") if result else None
+        if product_data:
+            return cls(client, product_data)
         return None
 
     @classmethod
@@ -428,7 +498,7 @@ class Product:
                     productType
                     vendor
                     tags
-                    description
+                    descriptionHtml
                 }
                 userErrors {
                     field
@@ -441,9 +511,9 @@ class Product:
         variables = {"input": product_data}
         result = client.execute_mutation(mutation, variables)
 
-        # Handle user errors
-        if result and "data" in result and "productCreate" in result["data"]:
-            product_create = result["data"]["productCreate"]
+        # Shopify returns mutation/query result directly (no top-level 'data' key)
+        product_create = result.get("productCreate") if result else None
+        if product_create:
             if product_create.get("userErrors"):
                 error_messages = []
                 for error in product_create["userErrors"]:
@@ -454,11 +524,13 @@ class Product:
                     else:
                         field_str = str(field)
                     error_messages.append(f"{field_str}: {message}")
+                print("[DEBUG] Product.create userErrors:", product_create["userErrors"])
                 raise ValueError(f"Product creation failed: {'; '.join(error_messages)}")
 
             if product_create.get("product"):
                 return cls(client, product_create["product"])
 
+        print("[DEBUG] Product.create mutation response:", result)
         raise ValueError("Product creation failed: No product data returned")
 
     # Instance methods for product operations
@@ -484,7 +556,11 @@ class Product:
         # Add changed fields
         for key in ["title", "handle", "description", "productType", "vendor", "tags"]:
             if key in self._data and self._data.get(key) != self._original_data.get(key):
-                update_data[key] = self._data[key]
+                # Map 'description' to 'descriptionHtml' for Shopify API
+                if key == "description":
+                    update_data["descriptionHtml"] = self._data["description"]
+                else:
+                    update_data[key] = self._data[key]
 
         mutation = """
         mutation productUpdate($input: ProductInput!) {
@@ -498,7 +574,7 @@ class Product:
                     productType
                     vendor
                     tags
-                    description
+                    descriptionHtml
                 }
                 userErrors {
                     field
@@ -511,9 +587,9 @@ class Product:
         variables = {"input": update_data}
         result = self.client.execute_mutation(mutation, variables)
 
-        # Handle user errors
-        if result and "data" in result and "productUpdate" in result["data"]:
-            product_update = result["data"]["productUpdate"]
+        # Handle user errors (expect top-level 'productUpdate' in response)
+        product_update = result.get("productUpdate") if result else None
+        if product_update:
             if product_update.get("userErrors"):
                 error_messages = []
                 for error in product_update["userErrors"]:
@@ -563,9 +639,9 @@ class Product:
         variables = {"input": {"id": self.id}}
         result = self.client.execute_mutation(mutation, variables)
 
-        # Handle user errors
-        if result and "data" in result and "productDelete" in result["data"]:
-            product_delete = result["data"]["productDelete"]
+        # Shopify returns mutation/query result directly (no top-level 'data' key)
+        product_delete = result.get("productDelete") if result else None
+        if product_delete:
             if product_delete.get("userErrors"):
                 error_messages = []
                 for error in product_delete["userErrors"]:
@@ -600,7 +676,12 @@ class Product:
 
         # Default to publishing to web if no publications specified
         if publications is None:
-            publications = [{"publicationId": self.WEB_PUBLICATION_ID}]  # Web publication
+            default_pub = self._get_default_publication()
+            if default_pub:
+                publications = [{"publicationId": default_pub["id"]}]
+            else:
+                # Fallback to the old static ID for backward compatibility
+                publications = [{"publicationId": self.WEB_PUBLICATION_ID}]
 
         mutation = """
         mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
@@ -623,9 +704,15 @@ class Product:
         variables = {"id": self.id, "input": publications}
         result = self.client.execute_mutation(mutation, variables)
 
-        # Handle user errors
-        if result and "data" in result and "publishablePublish" in result["data"]:
-            publish_result = result["data"]["publishablePublish"]
+        # Handle user errors (support both with and without 'data' wrapper)
+        publish_result = None
+        if result:
+            if "data" in result and isinstance(result["data"], dict):
+                publish_result = result["data"].get("publishablePublish")
+            else:
+                publish_result = result.get("publishablePublish")
+
+        if publish_result:
             if publish_result.get("userErrors"):
                 error_messages = []
                 for error in publish_result["userErrors"]:
@@ -639,7 +726,6 @@ class Product:
                 raise ValueError(f"Product publish failed: {'; '.join(error_messages)}")
 
             if publish_result.get("publishable"):
-                # Update our status
                 self._data["status"] = "ACTIVE"
                 return self
 
@@ -663,7 +749,12 @@ class Product:
 
         # Default to unpublishing from web if no publications specified
         if publications is None:
-            publications = [{"publicationId": self.WEB_PUBLICATION_ID}]  # Web publication
+            default_pub = self._get_default_publication()
+            if default_pub:
+                publications = [{"publicationId": default_pub["id"]}]
+            else:
+                # Fallback to the old static ID for backward compatibility
+                publications = [{"publicationId": self.WEB_PUBLICATION_ID}]
 
         mutation = """
         mutation publishableUnpublish($id: ID!, $input: [PublicationInput!]!) {
@@ -685,9 +776,15 @@ class Product:
         variables = {"id": self.id, "input": publications}
         result = self.client.execute_mutation(mutation, variables)
 
-        # Handle user errors
-        if result and "data" in result and "publishableUnpublish" in result["data"]:
-            unpublish_result = result["data"]["publishableUnpublish"]
+        # Handle user errors (support both with and without 'data' wrapper)
+        unpublish_result = None
+        if result:
+            if "data" in result and isinstance(result["data"], dict):
+                unpublish_result = result["data"].get("publishableUnpublish")
+            else:
+                unpublish_result = result.get("publishableUnpublish")
+
+        if unpublish_result:
             if unpublish_result.get("userErrors"):
                 error_messages = []
                 for error in unpublish_result["userErrors"]:
@@ -701,7 +798,6 @@ class Product:
                 raise ValueError(f"Product unpublish failed: {'; '.join(error_messages)}")
 
             if unpublish_result.get("publishable"):
-                # Update our status
                 self._data["status"] = "DRAFT"
                 return self
 

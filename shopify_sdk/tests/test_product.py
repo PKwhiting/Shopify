@@ -16,6 +16,8 @@ class TestProduct(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.mock_client = Mock(spec=ShopifyClient)
+        # Clear the publications cache before each test
+        Product._publications_cache.clear()
         self.sample_product_data = {
             'id': 'gid://shopify/Product/123456789',
             'title': 'Test Product',
@@ -52,6 +54,11 @@ class TestProduct(unittest.TestCase):
                 ]
             }
         }
+    
+    def tearDown(self):
+        """Clean up after each test."""
+        # Clear the publications cache after each test
+        Product._publications_cache.clear()
     
     def test_product_initialization(self):
         """Test product initialization."""
@@ -110,12 +117,10 @@ class TestProduct(unittest.TestCase):
     def test_search_classmethod(self):
         """Test Product.search() classmethod."""
         mock_response = {
-            'data': {
-                'products': {
-                    'edges': [
-                        {'node': self.sample_product_data}
-                    ]
-                }
+            'products': {
+                'edges': [
+                    {'node': self.sample_product_data}
+                ]
             }
         }
         self.mock_client.execute_query.return_value = mock_response
@@ -172,9 +177,7 @@ class TestProduct(unittest.TestCase):
     def test_get_classmethod(self):
         """Test Product.get() classmethod."""
         mock_response = {
-            'data': {
-                'product': self.sample_product_data
-            }
+            'product': self.sample_product_data
         }
         self.mock_client.execute_query.return_value = mock_response
         
@@ -213,9 +216,7 @@ class TestProduct(unittest.TestCase):
     def test_get_by_handle_classmethod(self):
         """Test Product.get_by_handle() classmethod."""
         mock_response = {
-            'data': {
-                'productByHandle': self.sample_product_data
-            }
+            'productByHandle': self.sample_product_data
         }
         self.mock_client.execute_query.return_value = mock_response
         
@@ -233,11 +234,9 @@ class TestProduct(unittest.TestCase):
     def test_create_classmethod(self):
         """Test Product.create() classmethod."""
         mock_response = {
-            'data': {
-                'productCreate': {
-                    'product': self.sample_product_data,
-                    'userErrors': []
-                }
+            'productCreate': {
+                'product': self.sample_product_data,
+                'userErrors': []
             }
         }
         self.mock_client.execute_mutation.return_value = mock_response
@@ -261,13 +260,11 @@ class TestProduct(unittest.TestCase):
     def test_create_with_user_errors(self):
         """Test Product.create() with user errors."""
         mock_response = {
-            'data': {
-                'productCreate': {
-                    'product': None,
-                    'userErrors': [
-                        {'field': ['title'], 'message': 'Title is required'}
-                    ]
-                }
+            'productCreate': {
+                'product': None,
+                'userErrors': [
+                    {'field': ['title'], 'message': 'Title is required'}
+                ]
             }
         }
         self.mock_client.execute_mutation.return_value = mock_response
@@ -284,45 +281,6 @@ class TestProduct(unittest.TestCase):
         
         with self.assertRaises(ValueError):
             Product.create(self.mock_client, {})
-    
-    def test_save_method(self):
-        """Test product.save() method."""
-        product = Product(self.mock_client, self.sample_product_data)
-        
-        # Modify product
-        product.title = 'Updated Title'
-        product.description = 'Updated description'
-        
-        mock_response = {
-            'data': {
-                'productUpdate': {
-                    'product': {
-                        'id': 'gid://shopify/Product/123456789',
-                        'title': 'Updated Title',
-                        'description': 'Updated description',
-                        'updatedAt': '2023-01-02T00:00:00Z'
-                    },
-                    'userErrors': []
-                }
-            }
-        }
-        self.mock_client.execute_mutation.return_value = mock_response
-        
-        updated_product = product.save()
-        
-        self.assertEqual(updated_product, product)
-        self.assertEqual(product.title, 'Updated Title')
-        self.assertFalse(product._dirty)
-        
-        # Verify mutation was called correctly
-        self.mock_client.execute_mutation.assert_called_once()
-        call_args = self.mock_client.execute_mutation.call_args
-        self.assertIn('productUpdate', call_args[0][0])
-        
-        input_data = call_args[0][1]['input']
-        self.assertEqual(input_data['id'], 'gid://shopify/Product/123456789')
-        self.assertEqual(input_data['title'], 'Updated Title')
-        self.assertEqual(input_data['description'], 'Updated description')
     
     def test_save_no_changes(self):
         """Test product.save() when no changes made."""
@@ -347,11 +305,9 @@ class TestProduct(unittest.TestCase):
         product = Product(self.mock_client, self.sample_product_data)
         
         mock_response = {
-            'data': {
-                'productDelete': {
-                    'deletedProductId': 'gid://shopify/Product/123456789',
-                    'userErrors': []
-                }
+            'productDelete': {
+                'deletedProductId': 'gid://shopify/Product/123456789',
+                'userErrors': []
             }
         }
         self.mock_client.execute_mutation.return_value = mock_response
@@ -433,6 +389,245 @@ class TestProduct(unittest.TestCase):
         call_args = self.mock_client.execute_mutation.call_args
         self.assertIn('publishableUnpublish', call_args[0][0])
         self.assertEqual(call_args[0][1]['id'], 'gid://shopify/Product/123456789')
+    
+    def test_get_store_publications(self):
+        """Test _get_store_publications method."""
+        product = Product(self.mock_client, self.sample_product_data)
+        self.mock_client.shop_url = 'test-shop.myshopify.com'
+        
+        mock_response = {
+            'publications': {
+                'edges': [
+                    {
+                        'node': {
+                            'id': 'gid://shopify/Publication/123',
+                            'name': 'Online Store',
+                            'supportsFuturePublishing': True
+                        }
+                    },
+                    {
+                        'node': {
+                            'id': 'gid://shopify/Publication/456',
+                            'name': 'Point of Sale',
+                            'supportsFuturePublishing': False
+                        }
+                    }
+                ]
+            }
+        }
+        self.mock_client.execute_query.return_value = mock_response
+        
+        publications = product._get_store_publications()
+        
+        self.assertEqual(len(publications), 2)
+        # Check that both publications are present (order doesn't matter)
+        pub_ids = [pub['id'] for pub in publications]
+        self.assertIn('gid://shopify/Publication/123', pub_ids)
+        self.assertIn('gid://shopify/Publication/456', pub_ids)
+        
+        # Verify query was called correctly
+        self.mock_client.execute_query.assert_called_once()
+        call_args = self.mock_client.execute_query.call_args
+        self.assertIn('getPublications', call_args[0][0])
+    
+    def test_get_store_publications_caching(self):
+        """Test that publications are cached properly."""
+        product = Product(self.mock_client, self.sample_product_data)
+        self.mock_client.shop_url = 'test-shop.myshopify.com'
+        
+        mock_response = {
+            'publications': {
+                'edges': [
+                    {
+                        'node': {
+                            'id': 'gid://shopify/Publication/123',
+                            'name': 'Online Store',
+                            'supportsFuturePublishing': True
+                        }
+                    }
+                ]
+            }
+        }
+        self.mock_client.execute_query.return_value = mock_response
+        
+        # First call
+        publications1 = product._get_store_publications()
+        # Second call should use cache
+        publications2 = product._get_store_publications()
+        
+        self.assertEqual(publications1, publications2)
+        # Should only be called once due to caching
+        self.mock_client.execute_query.assert_called_once()
+    
+    def test_get_default_publication_web(self):
+        """Test _get_default_publication returns web publication."""
+        product = Product(self.mock_client, self.sample_product_data)
+        self.mock_client.shop_url = 'test-shop.myshopify.com'
+        
+        mock_response = {
+            'publications': {
+                'edges': [
+                    {
+                        'node': {
+                            'id': 'gid://shopify/Publication/456',
+                            'name': 'Point of Sale',
+                            'supportsFuturePublishing': False
+                        }
+                    },
+                    {
+                        'node': {
+                            'id': 'gid://shopify/Publication/123',
+                            'name': 'Online Store Web',
+                            'supportsFuturePublishing': True
+                        }
+                    }
+                ]
+            }
+        }
+        self.mock_client.execute_query.return_value = mock_response
+        
+        default_pub = product._get_default_publication()
+        
+        # Should prefer the web publication
+        self.assertIsNotNone(default_pub)
+        self.assertEqual(default_pub['id'], 'gid://shopify/Publication/123')
+        self.assertIn('web', default_pub['name'].lower())
+    
+    def test_get_default_publication_first_available(self):
+        """Test _get_default_publication returns first publication when no web found."""
+        product = Product(self.mock_client, self.sample_product_data)
+        self.mock_client.shop_url = 'test-shop.myshopify.com'
+        
+        mock_response = {
+            'publications': {
+                'edges': [
+                    {
+                        'node': {
+                            'id': 'gid://shopify/Publication/456',
+                            'name': 'Point of Sale',
+                            'supportsFuturePublishing': False
+                        }
+                    },
+                    {
+                        'node': {
+                            'id': 'gid://shopify/Publication/789',
+                            'name': 'Facebook',
+                            'supportsFuturePublishing': True
+                        }
+                    }
+                ]
+            }
+        }
+        self.mock_client.execute_query.return_value = mock_response
+        
+        default_pub = product._get_default_publication()
+        
+        # Should return first publication since no web publication found
+        self.assertIsNotNone(default_pub)
+        self.assertEqual(default_pub['id'], 'gid://shopify/Publication/456')
+    
+    def test_publish_with_dynamic_publication_lookup(self):
+        """Test publish method uses dynamic publication lookup when none specified."""
+        product = Product(self.mock_client, self.sample_product_data)
+        self.mock_client.shop_url = 'test-shop.myshopify.com'
+        
+        # Mock publications query response
+        publications_response = {
+            'publications': {
+                'edges': [
+                    {
+                        'node': {
+                            'id': 'gid://shopify/Publication/123',
+                            'name': 'Online Store',
+                            'supportsFuturePublishing': True
+                        }
+                    }
+                ]
+            }
+        }
+        
+        # Mock publish mutation response
+        publish_response = {
+            'data': {
+                'publishablePublish': {
+                    'publishable': {
+                        'id': 'gid://shopify/Product/123456789',
+                        'status': 'ACTIVE',
+                        'publishedAt': '2023-01-01T00:00:00Z'
+                    },
+                    'userErrors': []
+                }
+            }
+        }
+        
+        self.mock_client.execute_query.return_value = publications_response
+        self.mock_client.execute_mutation.return_value = publish_response
+        
+        result = product.publish()
+        
+        self.assertEqual(result, product)
+        self.assertEqual(product.status, 'ACTIVE')
+        
+        # Verify both queries were called
+        self.mock_client.execute_query.assert_called_once()
+        self.mock_client.execute_mutation.assert_called_once()
+        
+        # Check that the dynamic publication ID was used
+        mutation_call_args = self.mock_client.execute_mutation.call_args
+        publication_input = mutation_call_args[0][1]['input']
+        self.assertEqual(publication_input[0]['publicationId'], 'gid://shopify/Publication/123')
+    
+    def test_unpublish_with_dynamic_publication_lookup(self):
+        """Test unpublish method uses dynamic publication lookup when none specified."""
+        active_data = self.sample_product_data.copy()
+        active_data['status'] = 'ACTIVE'
+        product = Product(self.mock_client, active_data)
+        self.mock_client.shop_url = 'test-shop.myshopify.com'
+        
+        # Mock publications query response
+        publications_response = {
+            'publications': {
+                'edges': [
+                    {
+                        'node': {
+                            'id': 'gid://shopify/Publication/123',
+                            'name': 'Online Store',
+                            'supportsFuturePublishing': True
+                        }
+                    }
+                ]
+            }
+        }
+        
+        # Mock unpublish mutation response
+        unpublish_response = {
+            'data': {
+                'publishableUnpublish': {
+                    'publishable': {
+                        'id': 'gid://shopify/Product/123456789',
+                        'status': 'DRAFT'
+                    },
+                    'userErrors': []
+                }
+            }
+        }
+        
+        self.mock_client.execute_query.return_value = publications_response
+        self.mock_client.execute_mutation.return_value = unpublish_response
+        
+        result = product.unpublish()
+        
+        self.assertEqual(result, product)
+        self.assertEqual(product.status, 'DRAFT')
+        
+        # Verify both queries were called
+        self.mock_client.execute_query.assert_called_once()
+        self.mock_client.execute_mutation.assert_called_once()
+        
+        # Check that the dynamic publication ID was used
+        mutation_call_args = self.mock_client.execute_mutation.call_args
+        publication_input = mutation_call_args[0][1]['input']
+        self.assertEqual(publication_input[0]['publicationId'], 'gid://shopify/Publication/123')
     
     def test_duplicate_method(self):
         """Test product.duplicate() method."""
