@@ -5,7 +5,7 @@ Simplified interface for dealing with individual Shopify products.
 Provides classmethods for factory operations and instance methods for product operations.
 """
 
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .client import ShopifyClient
@@ -226,7 +226,7 @@ class Product:
     @classmethod
     def search(
         cls,
-        client: "ShopifyClient",
+        client: Optional["ShopifyClient"] = None,
         query: str = "",
         first: int = 10,
         after: Optional[str] = None,
@@ -236,7 +236,7 @@ class Product:
         Search for products.
 
         Args:
-            client: ShopifyClient instance
+            client: ShopifyClient instance. If None, will be created from environment variables.
             query: Search query string
             first: Number of products to fetch (max 250)
             after: Cursor for pagination
@@ -246,8 +246,12 @@ class Product:
             List of Product instances
 
         Raises:
-            ValueError: If parameters are invalid
+            ValueError: If parameters are invalid or environment variables are not properly set
         """
+        if client is None:
+            from .client import create_client_from_environment
+            client = create_client_from_environment()
+            
         if not isinstance(first, int) or first < 1:
             raise ValueError("'first' parameter must be a positive integer")
         if first > 250:
@@ -333,20 +337,35 @@ class Product:
         return products
 
     @classmethod
-    def get(cls, client: "ShopifyClient", product_id: str) -> Optional["Product"]:
+    def get(cls, client_or_product_id: Union["ShopifyClient", str], product_id: Optional[str] = None) -> Optional["Product"]:
         """
         Get a product by ID.
 
         Args:
-            client: ShopifyClient instance
-            product_id: Product ID
+            client_or_product_id: ShopifyClient instance OR product ID (when using environment variables)
+            product_id: Product ID (when client is provided as first arg)
 
         Returns:
             Product instance or None if not found
 
         Raises:
-            ValueError: If product_id is invalid
+            ValueError: If product_id is invalid or environment variables are not properly set
         """
+        # Handle both call patterns:
+        # 1. Product.get(client, product_id) - traditional
+        # 2. Product.get(product_id) - new environment variable style
+        
+        if isinstance(client_or_product_id, str) and product_id is None:
+            # New style: Product.get(product_id)
+            product_id = client_or_product_id
+            from .client import create_client_from_environment
+            client = create_client_from_environment()
+        else:
+            # Traditional style: Product.get(client, product_id)
+            client = client_or_product_id
+            if not product_id:
+                raise ValueError("Product ID must be provided")
+                
         if not product_id or not isinstance(product_id, str):
             raise ValueError("Product ID must be a non-empty string")
 
@@ -400,20 +419,35 @@ class Product:
         return None
 
     @classmethod
-    def get_by_handle(cls, client: "ShopifyClient", handle: str) -> Optional["Product"]:
+    def get_by_handle(cls, client_or_handle: Union["ShopifyClient", str], handle: Optional[str] = None) -> Optional["Product"]:
         """
         Get a product by handle.
 
         Args:
-            client: ShopifyClient instance
-            handle: Product handle
+            client_or_handle: ShopifyClient instance OR product handle (when using environment variables)
+            handle: Product handle (when client is provided as first arg)
 
         Returns:
             Product instance or None if not found
 
         Raises:
-            ValueError: If handle is invalid
+            ValueError: If handle is invalid or environment variables are not properly set
         """
+        # Handle both call patterns:
+        # 1. Product.get_by_handle(client, handle) - traditional
+        # 2. Product.get_by_handle(handle) - new environment variable style
+        
+        if isinstance(client_or_handle, str) and handle is None:
+            # New style: Product.get_by_handle(handle)
+            handle = client_or_handle
+            from .client import create_client_from_environment
+            client = create_client_from_environment()
+        else:
+            # Traditional style: Product.get_by_handle(client, handle)
+            client = client_or_handle
+            if not handle:
+                raise ValueError("Product handle must be provided")
+                
         if not handle or not isinstance(handle, str):
             raise ValueError("Product handle must be a non-empty string")
 
@@ -466,20 +500,35 @@ class Product:
         return None
 
     @classmethod
-    def create(cls, client: "ShopifyClient", product_data: Dict[str, Any]) -> "Product":
+    def create(cls, client_or_product_data: Union["ShopifyClient", Dict[str, Any]], product_data: Optional[Dict[str, Any]] = None) -> "Product":
         """
         Create a new product.
 
         Args:
-            client: ShopifyClient instance
-            product_data: Product data for creation
+            client_or_product_data: ShopifyClient instance OR product data (when using environment variables)
+            product_data: Product data for creation (when client is provided as first arg)
 
         Returns:
             Created Product instance
 
         Raises:
-            ValueError: If product_data is invalid or operation fails
+            ValueError: If product_data is invalid, operation fails, or environment variables are not properly set
         """
+        # Handle both call patterns:
+        # 1. Product.create(client, product_data) - traditional
+        # 2. Product.create(product_data) - new environment variable style
+        
+        if isinstance(client_or_product_data, dict) and product_data is None:
+            # New style: Product.create(product_data)
+            product_data = client_or_product_data
+            from .client import create_client_from_environment
+            client = create_client_from_environment()
+        else:
+            # Traditional style: Product.create(client, product_data)
+            client = client_or_product_data
+            if not product_data:
+                raise ValueError("Product data must be provided")
+                
         if not isinstance(product_data, dict):
             raise ValueError("Product data must be a dictionary")
         if not product_data:

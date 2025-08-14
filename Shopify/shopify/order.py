@@ -5,7 +5,7 @@ Simplified interface for dealing with individual Shopify orders.
 Provides classmethods for factory operations and instance methods for order operations.
 """
 
-from typing import Dict, Any, Optional, List, TYPE_CHECKING
+from typing import Dict, Any, Optional, List, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
 	from .client import ShopifyClient
@@ -13,16 +13,23 @@ if TYPE_CHECKING:
 
 class Order:
 	@classmethod
-	def list(cls, client: "ShopifyClient"):
+	def list(cls, client: Optional["ShopifyClient"] = None):
 		"""
 		Yield all orders from the store, paginating automatically.
 
 		Args:
-			client: ShopifyClient instance
+			client: ShopifyClient instance. If None, will be created from environment variables.
 
 		Yields:
 			Order instances
+			
+		Raises:
+			ValueError: If client is None and environment variables are not properly set
 		"""
+		if client is None:
+			from .client import create_client_from_environment
+			client = create_client_from_environment()
+			
 		from .resources.orders import Orders
 		resource = Orders(client)
 		after = None
@@ -149,20 +156,35 @@ class Order:
 		return fulfillments if isinstance(fulfillments, list) else []
 
 	@classmethod
-	def get(cls, client: "ShopifyClient", order_id: str) -> Optional["Order"]:
+	def get(cls, client_or_order_id: Union["ShopifyClient", str], order_id: Optional[str] = None) -> Optional["Order"]:
 		"""
 		Get an order by ID.
 
 		Args:
-			client: ShopifyClient instance
-			order_id: Order ID
+			client_or_order_id: ShopifyClient instance OR order ID (when using environment variables)
+			order_id: Order ID (when client is provided as first arg)
 
 		Returns:
 			Order instance or None if not found
 
 		Raises:
-			ValueError: If order_id is invalid
+			ValueError: If order_id is invalid or environment variables are not properly set
 		"""
+		# Handle both call patterns:
+		# 1. Order.get(client, order_id) - traditional
+		# 2. Order.get(order_id) - new environment variable style
+		
+		if isinstance(client_or_order_id, str) and order_id is None:
+			# New style: Order.get(order_id)
+			order_id = client_or_order_id
+			from .client import create_client_from_environment
+			client = create_client_from_environment()
+		else:
+			# Traditional style: Order.get(client, order_id)
+			client = client_or_order_id
+			if not order_id:
+				raise ValueError("Order ID must be provided")
+				
 		if not order_id or not isinstance(order_id, str):
 			raise ValueError("Order ID must be a non-empty string")
 
@@ -176,20 +198,35 @@ class Order:
 		return None
 
 	@classmethod
-	def get_buyer_info(cls, client: "ShopifyClient", order_id: str) -> Optional[Dict[str, Any]]:
+	def get_buyer_info(cls, client_or_order_id: Union["ShopifyClient", str], order_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
 		"""
 		Get comprehensive buyer information for an order by ID.
 
 		Args:
-			client: ShopifyClient instance
-			order_id: Order ID
+			client_or_order_id: ShopifyClient instance OR order ID (when using environment variables)
+			order_id: Order ID (when client is provided as first arg)
 
 		Returns:
 			Buyer info dict or None if not found
 
 		Raises:
-			ValueError: If order_id is invalid
+			ValueError: If order_id is invalid or environment variables are not properly set
 		"""
+		# Handle both call patterns:
+		# 1. Order.get_buyer_info(client, order_id) - traditional
+		# 2. Order.get_buyer_info(order_id) - new environment variable style
+		
+		if isinstance(client_or_order_id, str) and order_id is None:
+			# New style: Order.get_buyer_info(order_id)
+			order_id = client_or_order_id
+			from .client import create_client_from_environment
+			client = create_client_from_environment()
+		else:
+			# Traditional style: Order.get_buyer_info(client, order_id)
+			client = client_or_order_id
+			if not order_id:
+				raise ValueError("Order ID must be provided")
+				
 		if not order_id or not isinstance(order_id, str):
 			raise ValueError("Order ID must be a non-empty string")
 

@@ -254,3 +254,23 @@ class ShopifyClient:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit - clean up resources."""
         self.close()
+
+
+def create_client_from_environment() -> ShopifyClient:
+    """
+    Create a ShopifyClient instance using environment variables.
+    
+    This helper function creates a ShopifyClient using:
+    - SHOPIFY_ACCESS_TOKEN or SHOPIFY_API_KEY for authentication
+    - SHOP_URL for the shop URL
+    
+    Returns:
+        ShopifyClient: Configured client instance
+        
+    Raises:
+        ValueError: If required environment variables are not set
+    """
+    return ShopifyClient(
+        shop_url=None,  # Will be loaded from SHOP_URL environment variable
+        api_key=None    # Will be loaded from SHOPIFY_ACCESS_TOKEN environment variable
+    )
