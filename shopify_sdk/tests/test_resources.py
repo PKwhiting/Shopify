@@ -147,6 +147,53 @@ class TestOrdersResource(unittest.TestCase):
         variables = call_args[0][1]  # Second positional argument
         self.assertEqual(variables["orderId"], order_id)
         self.assertEqual(variables["reason"], "CUSTOMER")
+    
+    def test_get_buyer_info(self):
+        """Test getting comprehensive buyer information for an order."""
+        order_id = "gid://shopify/Order/789"
+        expected_result = {
+            "order": {
+                "id": order_id,
+                "email": "buyer@example.com",
+                "customer": {
+                    "id": "gid://shopify/Customer/123",
+                    "firstName": "John",
+                    "lastName": "Doe",
+                    "email": "buyer@example.com",
+                    "phone": "+1234567890",
+                    "acceptsMarketing": True
+                },
+                "billingAddress": {
+                    "address1": "123 Main St",
+                    "city": "Anytown",
+                    "province": "CA",
+                    "country": "United States"
+                },
+                "shippingAddress": {
+                    "address1": "123 Main St",
+                    "city": "Anytown",
+                    "province": "CA",
+                    "country": "United States"
+                }
+            }
+        }
+        self.mock_client.execute_query.return_value = expected_result
+        
+        result = self.orders.get_buyer_info(order_id)
+        
+        self.assertEqual(result, expected_result)
+        call_args = self.mock_client.execute_query.call_args
+        self.assertIn("getBuyerInfo", call_args[0][0])
+        # Verify the query includes comprehensive buyer information fields
+        query = call_args[0][0]
+        self.assertIn("customer", query)
+        self.assertIn("billingAddress", query)
+        self.assertIn("shippingAddress", query)
+        self.assertIn("defaultAddress", query)
+        # Check that execute_query was called with 2 arguments: query and variables
+        self.assertEqual(len(call_args[0]), 2)
+        variables = call_args[0][1]  # Second positional argument
+        self.assertEqual(variables["id"], order_id)
 
 
 if __name__ == '__main__':

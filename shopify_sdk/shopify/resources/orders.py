@@ -35,7 +35,130 @@ class Orders(BaseResource):
             ValueError: If parameters are invalid
         """
         self._validate_pagination_params(first, after)
-        query, variables = QueryBuilder.build_order_query(first, after)
+        # Inline query to match latest Shopify schema (remove deprecated fields)
+        query = """
+        query getOrders($first: Int!, $after: String) {
+            orders(first: $first, after: $after) {
+                edges {
+                    node {
+                        id
+                        name
+                        email
+                        createdAt
+                        updatedAt
+                        processedAt
+                        displayFinancialStatus
+                        displayFulfillmentStatus
+                        totalPriceSet {
+                            presentmentMoney {
+                                amount
+                                currencyCode
+                            }
+                        }
+                        customer {
+                            id
+                            firstName
+                            lastName
+                            email
+                            phone
+                            state
+                            tags
+                            note
+                            createdAt
+                            updatedAt
+                            defaultAddress {
+                                id
+                                address1
+                                address2
+                                city
+                                province
+                                country
+                                zip
+                                firstName
+                                lastName
+                                phone
+                                company
+                            }
+                            addresses(first: 10) {
+                                id
+                                address1
+                                address2
+                                city
+                                province
+                                country
+                                zip
+                                firstName
+                                lastName
+                                phone
+                                company
+                            }
+                        }
+                        billingAddress {
+                            address1
+                            address2
+                            city
+                            province
+                            country
+                            zip
+                            firstName
+                            lastName
+                            phone
+                            company
+                        }
+                        shippingAddress {
+                            address1
+                            address2
+                            city
+                            province
+                            country
+                            zip
+                            firstName
+                            lastName
+                            phone
+                            company
+                        }
+                        lineItems(first: 10) {
+                            edges {
+                                node {
+                                    id
+                                    title
+                                    quantity
+                                    originalUnitPriceSet {
+                                        presentmentMoney {
+                                            amount
+                                            currencyCode
+                                        }
+                                    }
+                                    variant {
+                                        id
+                                        title
+                                        sku
+                                    }
+                                    product {
+                                        id
+                                        title
+                                        handle
+                                    }
+                                }
+                            }
+                        }
+                        fulfillments(first: 1) {
+                            id
+                            status
+                            createdAt
+                        }
+                    }
+                }
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
+            }
+        }
+        """
+        variables = {"first": first}
+        if after:
+            variables["after"] = after
         return self._execute_query_with_validation(query, variables)
 
     def get(self, order_id: str) -> Dict[str, Any]:
@@ -62,8 +185,8 @@ class Orders(BaseResource):
                 createdAt
                 updatedAt
                 processedAt
-                financialStatus
-                fulfillmentStatus
+                displayFinancialStatus
+                displayFulfillmentStatus
                 totalPriceSet {
                     presentmentMoney {
                         amount
@@ -75,6 +198,50 @@ class Orders(BaseResource):
                     firstName
                     lastName
                     email
+                    phone
+                    state
+                    tags
+                    note
+                    createdAt
+                    updatedAt
+                    defaultAddress {
+                        id
+                        address1
+                        address2
+                        city
+                        province
+                        country
+                        zip
+                        firstName
+                        lastName
+                        phone
+                        company
+                    }
+                    addresses(first: 10) {
+                        id
+                        address1
+                        address2
+                        city
+                        province
+                        country
+                        zip
+                        firstName
+                        lastName
+                        phone
+                        company
+                    }
+                }
+                billingAddress {
+                    address1
+                    address2
+                    city
+                    province
+                    country
+                    zip
+                    firstName
+                    lastName
+                    phone
+                    company
                 }
                 shippingAddress {
                     address1
@@ -86,6 +253,7 @@ class Orders(BaseResource):
                     firstName
                     lastName
                     phone
+                    company
                 }
                 lineItems(first: 250) {
                     edges {
@@ -113,15 +281,115 @@ class Orders(BaseResource):
                     }
                 }
                 fulfillments(first: 10) {
-                    edges {
-                        node {
-                            id
-                            status
-                            createdAt
-                            trackingCompany
-                            trackingNumbers
+                    id
+                    status
+                    createdAt
+                }
+            }
+        }
+        """
+        variables = {"id": order_id}
+        return self._execute_query_with_validation(query, variables)
+
+    def get_buyer_info(self, order_id: str) -> Dict[str, Any]:
+        """
+        Get comprehensive buyer information for a specific order.
+
+        Args:
+            order_id (str): The order ID
+
+        Returns:
+            dict: Comprehensive buyer information including customer details,
+                  billing address, shipping address, and order contact info
+
+        Raises:
+            ValueError: If order_id is invalid
+        """
+        order_id = self._validate_id(order_id)
+
+        query = """
+        query getBuyerInfo($id: ID!) {
+            order(id: $id) {
+                id
+                name
+                email
+                phone
+                customer {
+                    id
+                    firstName
+                    lastName
+                    email
+                    phone
+                    state
+                    tags
+                    note
+                    createdAt
+                    updatedAt
+                    lifetimeDuration
+                    defaultAddress {
+                        id
+                        address1
+                        address2
+                        city
+                        province
+                        country
+                        zip
+                        firstName
+                        lastName
+                        phone
+                        company
+                    }
+                    addresses(first: 10) {
+                        id
+                        address1
+                        address2
+                        city
+                        province
+                        country
+                        zip
+                        firstName
+                        lastName
+                        phone
+                        company
+                    }
+                    orders(first: 1) {
+                        edges {
+                            node {
+                                id
+                                createdAt
+                                totalPriceSet {
+                                    presentmentMoney {
+                                        amount
+                                        currencyCode
+                                    }
+                                }
+                            }
                         }
                     }
+                }
+                billingAddress {
+                    address1
+                    address2
+                    city
+                    province
+                    country
+                    zip
+                    firstName
+                    lastName
+                    phone
+                    company
+                }
+                shippingAddress {
+                    address1
+                    address2
+                    city
+                    province
+                    country
+                    zip
+                    firstName
+                    lastName
+                    phone
+                    company
                 }
             }
         }

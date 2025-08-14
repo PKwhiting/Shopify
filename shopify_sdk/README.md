@@ -207,6 +207,51 @@ cancelled_order = orders.cancel(
     reason="customer",
     notify_customer=True
 )
+
+# Get comprehensive buyer information for an order
+buyer_info = orders.get_buyer_info("gid://shopify/Order/123456789")
+
+# The buyer info includes:
+# - Customer details (name, email, phone, marketing preferences, tags)
+# - Customer addresses (default address and all addresses)
+# - Order billing and shipping addresses
+# - Customer order history
+print(f"Customer: {buyer_info['order']['customer']['firstName']} {buyer_info['order']['customer']['lastName']}")
+print(f"Email: {buyer_info['order']['customer']['email']}")
+print(f"Phone: {buyer_info['order']['customer']['phone']}")
+print(f"Marketing: {buyer_info['order']['customer']['acceptsMarketing']}")
+```
+
+#### Enhanced Buyer Information
+
+The Orders resource now provides comprehensive buyer information with enhanced queries that include:
+
+- **Customer Details**: Name, email, phone, marketing preferences, tags, notes, creation date
+- **Customer Addresses**: Default address and all customer addresses
+- **Order Addresses**: Billing and shipping addresses with complete details
+- **Customer History**: Access to customer's order history and lifetime data
+
+```python
+# List orders with enhanced buyer information
+orders_with_buyers = orders.list(first=20)
+
+# Each order now includes comprehensive buyer data:
+for edge in orders_with_buyers['orders']['edges']:
+    order = edge['node']
+    customer = order['customer']
+    billing = order['billingAddress']
+    shipping = order['shippingAddress']
+    
+    print(f"Order {order['name']}")
+    print(f"Customer: {customer['firstName']} {customer['lastName']}")
+    print(f"Email: {customer['email']}")
+    print(f"Phone: {customer['phone']}")
+    print(f"Marketing: {customer['acceptsMarketing']}")
+    if billing:
+        print(f"Billing: {billing['city']}, {billing['province']}")
+    if shipping:
+        print(f"Shipping: {shipping['city']}, {shipping['province']}")
+```
 ```
 
 ### Query Builder
@@ -303,7 +348,13 @@ This SDK covers the most commonly used Shopify GraphQL API features:
 ### Resources
 - **Products**: Create, read, update, delete products and variants
 - **Customers**: Manage customer information and addresses  
-- **Orders**: Retrieve and manage orders, fulfillments, and cancellations
+- **Orders**: Retrieve and manage orders, fulfillments, and cancellations with comprehensive buyer information
+
+### Enhanced Buyer Information
+- **Customer Details**: Full customer profiles with marketing preferences, tags, and notes
+- **Address Management**: Billing, shipping, and default addresses with complete details  
+- **Customer History**: Access to customer order history and lifetime data
+- **Dedicated Buyer API**: Specialized `get_buyer_info()` method for comprehensive buyer data retrieval
 
 ### Features
 - **Authentication**: API key-based authentication (no OAuth)

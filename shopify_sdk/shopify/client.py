@@ -63,7 +63,7 @@ class ShopifyClient:
             self.auth = ApiKeyAuth(_from_env=True)
         else:
             self.auth = ApiKeyAuth(api_key=api_key)
-            
+
         if not self.auth.is_valid():
             raise ValueError("Invalid API key provided")
 
