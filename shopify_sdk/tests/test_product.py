@@ -117,12 +117,10 @@ class TestProduct(unittest.TestCase):
     def test_search_classmethod(self):
         """Test Product.search() classmethod."""
         mock_response = {
-            'data': {
-                'products': {
-                    'edges': [
-                        {'node': self.sample_product_data}
-                    ]
-                }
+            'products': {
+                'edges': [
+                    {'node': self.sample_product_data}
+                ]
             }
         }
         self.mock_client.execute_query.return_value = mock_response
@@ -179,9 +177,7 @@ class TestProduct(unittest.TestCase):
     def test_get_classmethod(self):
         """Test Product.get() classmethod."""
         mock_response = {
-            'data': {
-                'product': self.sample_product_data
-            }
+            'product': self.sample_product_data
         }
         self.mock_client.execute_query.return_value = mock_response
         
@@ -220,9 +216,7 @@ class TestProduct(unittest.TestCase):
     def test_get_by_handle_classmethod(self):
         """Test Product.get_by_handle() classmethod."""
         mock_response = {
-            'data': {
-                'productByHandle': self.sample_product_data
-            }
+            'productByHandle': self.sample_product_data
         }
         self.mock_client.execute_query.return_value = mock_response
         
@@ -240,11 +234,9 @@ class TestProduct(unittest.TestCase):
     def test_create_classmethod(self):
         """Test Product.create() classmethod."""
         mock_response = {
-            'data': {
-                'productCreate': {
-                    'product': self.sample_product_data,
-                    'userErrors': []
-                }
+            'productCreate': {
+                'product': self.sample_product_data,
+                'userErrors': []
             }
         }
         self.mock_client.execute_mutation.return_value = mock_response
@@ -268,13 +260,11 @@ class TestProduct(unittest.TestCase):
     def test_create_with_user_errors(self):
         """Test Product.create() with user errors."""
         mock_response = {
-            'data': {
-                'productCreate': {
-                    'product': None,
-                    'userErrors': [
-                        {'field': ['title'], 'message': 'Title is required'}
-                    ]
-                }
+            'productCreate': {
+                'product': None,
+                'userErrors': [
+                    {'field': ['title'], 'message': 'Title is required'}
+                ]
             }
         }
         self.mock_client.execute_mutation.return_value = mock_response
@@ -354,11 +344,9 @@ class TestProduct(unittest.TestCase):
         product = Product(self.mock_client, self.sample_product_data)
         
         mock_response = {
-            'data': {
-                'productDelete': {
-                    'deletedProductId': 'gid://shopify/Product/123456789',
-                    'userErrors': []
-                }
+            'productDelete': {
+                'deletedProductId': 'gid://shopify/Product/123456789',
+                'userErrors': []
             }
         }
         self.mock_client.execute_mutation.return_value = mock_response
