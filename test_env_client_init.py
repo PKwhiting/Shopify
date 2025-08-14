@@ -274,7 +274,7 @@ class TestProductEnvironmentInit(unittest.TestCase):
         }
         self.mock_client.execute_query.return_value = products_data
         
-        # Test new style call: Product.search()
+        # Test new style call: Product.search() with no client
         products = Product.search()
         
         # Verify client was created from environment

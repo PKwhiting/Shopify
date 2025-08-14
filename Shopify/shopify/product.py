@@ -226,21 +226,21 @@ class Product:
     @classmethod
     def search(
         cls,
+        client: Optional["ShopifyClient"] = None,
         query: str = "",
         first: int = 10,
         after: Optional[str] = None,
         filters: Optional[Dict[str, Any]] = None,
-        client: Optional["ShopifyClient"] = None,
     ) -> List["Product"]:
         """
         Search for products.
 
         Args:
+            client: ShopifyClient instance. If None, will be created from environment variables.
             query: Search query string
             first: Number of products to fetch (max 250)
             after: Cursor for pagination
             filters: Additional filters (product_type, vendor, etc.)
-            client: ShopifyClient instance. If None, will be created from environment variables.
 
         Returns:
             List of Product instances
